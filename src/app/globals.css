@@ -1,26 +1,210 @@
 @import "tailwindcss";
 
+/* adOS Meta Ads Audit - Professional SaaS Design System */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Dark Mode - Default Theme */
+  --background: 222 47% 9%;
+  --foreground: 213 31% 91%;
+
+  /* Cards & Surfaces */
+  --card: 222 47% 11%;
+  --card-foreground: 213 31% 91%;
+  --card-hover: 222 47% 13%;
+
+  --popover: 222 47% 11%;
+  --popover-foreground: 213 31% 91%;
+
+  /* Primary Brand - Brighter Blue for Dark Mode */
+  --primary: 214 84% 65%;
+  --primary-foreground: 222 47% 11%;
+  --primary-hover: 214 84% 70%;
+  --primary-light: 214 84% 25%;
+
+  /* Secondary - Softer Purple */
+  --secondary: 262 52% 65%;
+  --secondary-foreground: 222 47% 11%;
+  --secondary-hover: 262 52% 70%;
+  --secondary-light: 262 52% 25%;
+
+  /* Accent - Brighter Green */
+  --accent: 158 64% 60%;
+  --accent-foreground: 222 47% 11%;
+  --accent-hover: 158 64% 65%;
+  --accent-light: 158 64% 25%;
+
+  /* Status Colors for Dark Mode */
+  --success: 158 64% 60%;
+  --success-foreground: 222 47% 11%;
+  --warning: 45 93% 65%;
+  --warning-foreground: 222 47% 11%;
+  --destructive: 0 72% 60%;
+  --destructive-foreground: 213 31% 91%;
+
+  /* Neutral System */
+  --muted: 215 28% 17%;
+  --muted-foreground: 215 20% 65%;
+  --border: 215 28% 17%;
+  --input: 215 28% 17%;
+  --ring: 214 84% 65%;
+
+  /* Design System Extensions */
+  --gradient-primary: linear-gradient(135deg, hsl(214, 84%, 65%), hsl(262, 52%, 65%));
+  --gradient-accent: linear-gradient(135deg, hsl(158, 64%, 60%), hsl(214, 84%, 65%));
+  --gradient-subtle: linear-gradient(180deg, hsl(222, 47%, 9%), hsl(222, 47%, 11%));
+  
+  --shadow-card: 0 1px 3px 0 hsl(222, 47%, 4%, 0.3), 0 1px 2px -1px hsl(222, 47%, 4%, 0.3);
+  --shadow-elevated: 0 4px 6px -1px hsl(222, 47%, 4%, 0.3), 0 2px 4px -2px hsl(222, 47%, 4%, 0.3);
+  --shadow-floating: 0 10px 15px -3px hsl(222, 47%, 4%, 0.3), 0 4px 6px -4px hsl(222, 47%, 4%, 0.3);
+
+  --radius: 0.75rem;
+
+  /* Sidebar tokens */
+  --sidebar-background: 222 47% 11%;
+  --sidebar-foreground: 213 31% 91%;
+  --sidebar-primary: 214 84% 65%;
+  --sidebar-primary-foreground: 222 47% 11%;
+  --sidebar-accent: 215 28% 17%;
+  --sidebar-accent-foreground: 213 31% 91%;
+  --sidebar-border: 215 28% 17%;
+  --sidebar-ring: 214 84% 65%;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --border-radius: var(--radius);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.light {
+  /* Light Mode - Clean Professional Theme */
+  --background: 0 0% 100%;
+  --foreground: 222 47% 11%;
+
+  /* Cards & Surfaces */
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --card-hover: 214 32% 97%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+
+  /* Primary Brand - Professional Blue */
+  --primary: 214 84% 56%;
+  --primary-foreground: 0 0% 100%;
+  --primary-hover: 214 84% 51%;
+  --primary-light: 214 100% 97%;
+
+  /* Secondary - Modern Purple */
+  --secondary: 262 52% 60%;
+  --secondary-foreground: 0 0% 100%;
+  --secondary-hover: 262 52% 55%;
+  --secondary-light: 262 55% 96%;
+
+  /* Accent - Success Green */
+  --accent: 158 64% 52%;
+  --accent-foreground: 0 0% 100%;
+  --accent-hover: 158 64% 47%;
+  --accent-light: 158 55% 96%;
+
+  /* Status Colors */
+  --success: 158 64% 52%;
+  --success-foreground: 0 0% 100%;
+  --warning: 45 93% 58%;
+  --warning-foreground: 45 86% 15%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+
+  /* Neutral System */
+  --muted: 220 14% 96%;
+  --muted-foreground: 220 9% 46%;
+  --border: 220 13% 91%;
+  --input: 220 13% 91%;
+  --ring: 214 84% 56%;
+
+  /* Design System Extensions */
+  --gradient-primary: linear-gradient(135deg, hsl(214, 84%, 56%), hsl(262, 52%, 60%));
+  --gradient-accent: linear-gradient(135deg, hsl(158, 64%, 52%), hsl(214, 84%, 56%));
+  --gradient-subtle: linear-gradient(180deg, hsl(0, 0%, 100%), hsl(214, 32%, 97%));
+  
+  --shadow-card: 0 1px 3px 0 hsl(222, 47%, 11%, 0.1), 0 1px 2px -1px hsl(222, 47%, 11%, 0.1);
+  --shadow-elevated: 0 4px 6px -1px hsl(222, 47%, 11%, 0.1), 0 2px 4px -2px hsl(222, 47%, 11%, 0.1);
+  --shadow-floating: 0 10px 15px -3px hsl(222, 47%, 11%, 0.1), 0 4px 6px -4px hsl(222, 47%, 11%, 0.1);
+
+  /* Sidebar tokens */
+  --sidebar-background: 0 0% 98%;
+  --sidebar-foreground: 222 47% 11%;
+  --sidebar-primary: 214 84% 56%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 220 14% 96%;
+  --sidebar-accent-foreground: 222 47% 11%;
+  --sidebar-border: 220 13% 91%;
+  --sidebar-ring: 214 84% 56%;
 }
+
+* {
+  border-color: hsl(var(--border));
+}
+
+/* Default to dark theme */
+html {
+  color-scheme: dark;
+}
+
+/* Apply dark theme by default - removed empty ruleset */
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Utility classes */
+.bg-gradient-primary {
+  background: var(--gradient-primary);
+}
+
+.bg-gradient-accent {
+  background: var(--gradient-accent);
+}
+
+.bg-gradient-subtle {
+  background: var(--gradient-subtle);
+}
+
+.shadow-card {
+  box-shadow: var(--shadow-card);
+}
+
+.shadow-elevated {
+  box-shadow: var(--shadow-elevated);
+}
+
+.shadow-floating {
+  box-shadow: var(--shadow-floating);
+}
+
+.text-balance {
+  text-wrap: balance;
 }
