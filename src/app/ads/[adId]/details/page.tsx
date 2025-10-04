@@ -2,24 +2,20 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip } from "recharts";
+import { Area, AreaChart, XAxis, YAxis, Tooltip } from "recharts";
 import { AppLayout } from "@/components/AppLayout";
 import { 
   ArrowLeft,
-  Play,
   Download,
   Share2,
-  Clock,
   Video,
   Lightbulb,
-  BarChart3,
   Brain,
   Eye,
   FileText,
@@ -27,17 +23,69 @@ import {
   TrendingUp,
   Target,
   Users,
-  DollarSign,
   MousePointer,
-  Heart,
   MessageCircle,
-  Share,
-  Bookmark,
   ChevronRight,
   Sparkles
 } from "lucide-react";
-import { Ad, VideoScene, AdVariation, AIVariationsResponse } from "@/types";
+import { Ad, VideoScene, AIVariationsResponse, HookVariation, VideoSceneVariation, InstructionVariation } from "@/types";
 import { fetchAdDetails, fetchVideoScenes, fetchAIVariations } from "@/services/adDetailsService";
+
+// Component for handling image loading with fallback
+const SceneImage = ({ 
+  src, 
+  alt, 
+  className,
+  onError 
+}: { 
+  src: string; 
+  alt: string; 
+  className?: string;
+  onError?: () => void;
+}) => {
+  const [useNextImage, setUseNextImage] = useState(true);
+  const [imgError, setImgError] = useState(false);
+
+  const handleNextImageError = () => {
+    setUseNextImage(false);
+    onError?.();
+  };
+
+  const handleImgError = () => {
+    setImgError(true);
+    onError?.();
+  };
+
+  if (imgError) {
+    return (
+      <div className={`bg-muted rounded aspect-video flex items-center justify-center ${className}`}>
+        <Video className="h-6 w-6 text-muted-foreground" />
+        <span className="ml-2 text-xs text-muted-foreground">Image unavailable</span>
+      </div>
+    );
+  }
+
+  if (useNextImage) {
+    return (
+      <Image 
+        src={src} 
+        alt={alt}
+        width={400}
+        height={225}
+        className={className}
+        onError={handleNextImageError}
+        unoptimized={true} // Disable optimization to avoid 500 errors
+      />
+    );
+  }
+
+  return (
+    <div className={`bg-muted rounded aspect-video flex items-center justify-center ${className}`}>
+      <Video className="h-6 w-6 text-muted-foreground" />
+      <span className="ml-2 text-xs text-muted-foreground">Loading failed</span>
+    </div>
+  );
+};
 
 export default function AdDetails() {
   const params = useParams();
@@ -93,14 +141,14 @@ export default function AdDetails() {
           console.log("📊 Processing variations array:", adVariations);
           
           // The webhook returns an array of variation objects, we need to merge them
-          const mergedVariations: any = {};
+          const mergedVariations: AIVariationsResponse = {};
           
           adVariations.forEach((variationGroup, index) => {
             console.log(`📊 Processing variation group ${index}:`, variationGroup);
             console.log(`📊 Variation group keys:`, Object.keys(variationGroup));
             Object.keys(variationGroup).forEach(key => {
               if (variationGroup[key]) {
-                mergedVariations[key] = variationGroup[key];
+                mergedVariations[key] = variationGroup[key] as HookVariation[] | VideoSceneVariation[] | InstructionVariation[];
                 console.log(`📊 Added ${key} with ${Array.isArray(variationGroup[key]) ? variationGroup[key].length : 'non-array'} items`);
               }
             });
@@ -165,12 +213,12 @@ export default function AdDetails() {
       
       // Process the data the same way as in the main function
       if (data && data.variations && Array.isArray(data.variations)) {
-        const mergedVariations: any = {};
-        data.variations.forEach((variationGroup: any, index: number) => {
+        const mergedVariations: AIVariationsResponse = {};
+        data.variations.forEach((variationGroup: Record<string, unknown>, index: number) => {
           console.log(`🧪 Processing variation group ${index}:`, Object.keys(variationGroup));
           Object.keys(variationGroup).forEach(key => {
             if (variationGroup[key]) {
-              mergedVariations[key] = variationGroup[key];
+              mergedVariations[key] = variationGroup[key] as HookVariation[] | VideoSceneVariation[] | InstructionVariation[];
             }
           });
         });
@@ -541,7 +589,7 @@ export default function AdDetails() {
                               {/* Screenshot */}
                               {scene.screenshot_url ? (
                                 <div className="rounded overflow-hidden aspect-video flex-shrink-0">
-                                  <img 
+                                  <SceneImage 
                                     src={scene.screenshot_url} 
                                     alt={`Scene ${scene.scene}`}
                                     className="w-full h-full object-cover"
@@ -706,7 +754,7 @@ export default function AdDetails() {
                       <div className="space-y-3">
                         {ad.analysis.converting_phrases.map((phrase, index) => (
                           <div key={index} className="p-3 bg-secondary/10 border border-secondary/20 rounded-lg">
-                            <p className="text-sm text-foreground leading-relaxed font-medium italic">"{phrase}"</p>
+                            <p className="text-sm text-foreground leading-relaxed font-medium italic">&ldquo;{phrase}&rdquo;</p>
                           </div>
                         ))}
                       </div>
@@ -841,7 +889,7 @@ export default function AdDetails() {
                         </div>
 
                         <div className="space-y-4">
-                          {variations.v1.map((hook, index) => (
+                          {variations.v1.map((hook) => (
                             <div key={hook.id} className="p-4 bg-primary/10 border border-primary/20 rounded-lg">
                               <div className="flex items-start justify-between mb-3">
                                 <Badge variant="secondary" className="text-xs">

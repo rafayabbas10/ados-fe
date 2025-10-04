@@ -1,4 +1,4 @@
-import { Ad, VideoScene, AdVariation, AIVariationsResponse } from "@/types";
+import { Ad, VideoScene, AIVariationsResponse } from "@/types";
 
 const AD_DETAILS_WEBHOOK = "https://n8n.srv931040.hstgr.cloud/webhook/67e2704e-b850-48e8-bbd8-b7ec3af93d71";
 const VIDEO_SCENES_WEBHOOK = "https://n8n.srv931040.hstgr.cloud/webhook/992b2c29-4e01-45bb-ad8a-7811ec1d1de2";
@@ -111,7 +111,7 @@ export async function fetchAIVariations(adId: string): Promise<AIVariationsRespo
     // Handle the current webhook format: { variations: [{ v1: [...] }, { v2: [...] }, ...] }
     if (data && data.variations && Array.isArray(data.variations)) {
       console.info('✅ Found variations array with length:', data.variations.length);
-      console.info('✅ Variations structure:', data.variations.map((v: any, i: number) => `${i}: ${Object.keys(v).join(', ')}`));
+      console.info('✅ Variations structure:', data.variations.map((v: Record<string, unknown>, i: number) => `${i}: ${Object.keys(v).join(', ')}`));
       console.info('✅ Sample variation data:', data.variations[0]);
       console.info('✅ Returning variations array to ad details page');
       return data.variations;

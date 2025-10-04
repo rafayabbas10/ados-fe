@@ -27,7 +27,7 @@ export const fetchAdAccounts = async (): Promise<AdAccount[]> => {
     console.log("📋 Response structure:", JSON.stringify(data, null, 2));
     
     // Handle different possible response structures
-    let rawAccounts: any[] = [];
+    let rawAccounts: Record<string, unknown>[] = [];
     
     if (Array.isArray(data)) {
       rawAccounts = data;
@@ -43,27 +43,31 @@ export const fetchAdAccounts = async (): Promise<AdAccount[]> => {
     console.log("🔢 Found", rawAccounts.length, "raw accounts");
     
     // Transform the webhook data to match our AdAccount interface
-    const transformedAccounts: AdAccount[] = rawAccounts.map((account: any, index: number) => {
+    const transformedAccounts: AdAccount[] = rawAccounts.map((account: Record<string, unknown>, index: number) => {
       console.log(`🔄 Processing account ${index}:`, account);
       
       // Use business_name as primary display name, fallback to name if business_name is empty
-      const displayName = account.business_name && account.business_name.trim() !== "" 
-        ? account.business_name 
-        : account.name || `Account ${index + 1}`;
+      const businessName = typeof account.business_name === 'string' ? account.business_name : '';
+      const accountName = typeof account.name === 'string' ? account.name : '';
+      const displayName = businessName && businessName.trim() !== "" 
+        ? businessName 
+        : accountName || `Account ${index + 1}`;
       
       // Convert amount_spent from cents to dollars
-      const totalSpend = account.amount_spent ? parseFloat(account.amount_spent) / 100 : 0;
+      const amountSpent = typeof account.amount_spent === 'string' ? account.amount_spent : '0';
+      const totalSpend = amountSpent ? parseFloat(amountSpent) / 100 : 0;
       
       // Generate a simple internal ID based on the Facebook account ID
-      const internalId = account.id ? account.id.replace('act_', '') : `account-${index}`;
+      const accountId = typeof account.id === 'string' ? account.id : '';
+      const internalId = accountId ? accountId.replace('act_', '') : `account-${index}`;
       
       return {
         id: internalId,
-        facebook_account_id: account.id || `act_${index}`,
+        facebook_account_id: accountId || `act_${index}`,
         account_name: displayName,
-        currency: account.currency || "USD",
-        timezone: account.timezone || "America/New_York", 
-        status: account.status || "ACTIVE",
+        currency: (typeof account.currency === 'string' ? account.currency : null) || "USD",
+        timezone: (typeof account.timezone === 'string' ? account.timezone : null) || "America/New_York", 
+        status: (typeof account.status === 'string' ? account.status as 'ACTIVE' | 'PAUSED' | 'DISABLED' : "ACTIVE"),
         created_at: new Date().toISOString(), // Default to current date
         report_count: Math.floor(Math.random() * 15) + 1, // Random report count for demo
         last_audit_date: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(), // Random date within last 30 days
@@ -82,7 +86,7 @@ export const fetchAdAccounts = async (): Promise<AdAccount[]> => {
     try {
       console.log("🔄 Retrying with no-cors mode...");
       
-      const response = await fetch(WEBHOOK_URL, {
+      await fetch(WEBHOOK_URL, {
         method: 'GET',
         mode: 'no-cors',
       });

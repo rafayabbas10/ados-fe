@@ -6,9 +6,9 @@ import { cn } from "@/lib/utils"
 const ChartContainer = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement> & {
-    config?: Record<string, any>
+    config?: Record<string, unknown>
   }
->(({ className, config, ...props }, ref) => {
+>(({ className, ...props }, ref) => {
   return (
     <div
       ref={ref}
@@ -22,9 +22,9 @@ ChartContainer.displayName = "ChartContainer"
 const ChartTooltip = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement> & {
-    content?: React.ComponentType<any>
+    content?: React.ComponentType<Record<string, unknown>>
   }
->(({ className, content: Content, ...props }, ref) => {
+>(({ content: Content, ...props }) => {
   return Content ? <Content {...props} /> : null
 })
 ChartTooltip.displayName = "ChartTooltip"
@@ -32,10 +32,10 @@ ChartTooltip.displayName = "ChartTooltip"
 const ChartTooltipContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement> & {
-    formatter?: (value: any) => string
-    labelFormatter?: (label: any) => string
+    formatter?: (value: unknown) => string
+    labelFormatter?: (label: unknown) => string
   }
->(({ className, formatter, labelFormatter, ...props }, ref) => {
+>(({ className, ...props }, ref) => {
   return (
     <div
       ref={ref}

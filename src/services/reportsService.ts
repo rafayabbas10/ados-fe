@@ -121,19 +121,24 @@ export const fetchReportAds = async (reportId: string): Promise<ReportAd[]> => {
     }
 
     // Coerce numeric fields in case the API returns strings
-    return firstArray.map((ad) => ({
-      ...ad,
-      id: (ad as any).id || (ad as any).ad_id || (ad as any).facebook_ad_id || (ad as any).name,
-      facebook_ad_id: (ad as any).facebook_ad_id || (ad as any).ad_id || (ad as any).id,
-      spend: Number((ad as any).spend) || 0,
-      roas: Number((ad as any).roas) || 0,
-      aov: Number((ad as any).aov) || 0,
-      thumbstop: Number((ad as any).thumbstop) || 0,
-      hold_rate: Number((ad as any).hold_rate) || 0,
-      ctr: Number((ad as any).ctr) || 0,
-      cpa: Number((ad as any).cpa) || 0,
-      ad_type: (ad as any).ad_type || "unknown",
-    }));
+    return firstArray.map((ad) => {
+      // Cast to unknown first, then to Record<string, unknown> to avoid TypeScript error
+      const adData = ad as unknown as Record<string, unknown>;
+      
+      return {
+        ...ad,
+        id: (adData.id as string) || (adData.ad_id as string) || (adData.facebook_ad_id as string) || (adData.name as string),
+        facebook_ad_id: (adData.facebook_ad_id as string) || (adData.ad_id as string) || (adData.id as string),
+        spend: Number(adData.spend) || 0,
+        roas: Number(adData.roas) || 0,
+        aov: Number(adData.aov) || 0,
+        thumbstop: Number(adData.thumbstop) || 0,
+        hold_rate: Number(adData.hold_rate) || 0,
+        ctr: Number(adData.ctr) || 0,
+        cpa: Number(adData.cpa) || 0,
+        ad_type: (adData.ad_type as string) || "unknown",
+      };
+    });
     
   } catch (error) {
     console.error("❌ Error fetching report ads:", error);

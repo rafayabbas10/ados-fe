@@ -12,7 +12,6 @@ import {
   Calendar, 
   BarChart3, 
   ArrowLeft,
-  Play,
   Eye,
   Target,
   Brain,

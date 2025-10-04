@@ -167,7 +167,7 @@ export interface AdVariation {
   title: string;
   description: string;
   optimization_focus: string;
-  generated_content: Record<string, any>;
+  generated_content: Record<string, unknown>;
   created_at: string;
   hook_variations?: HookVariationDetail[];
   video_blocks?: VideoBlockDetail[];

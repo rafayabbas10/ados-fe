@@ -9,7 +9,6 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAccount } from "@/contexts/AccountContext";
 import { 
   LayoutDashboard, 
-  FileText, 
   Play, 
   Settings, 
   LogOut, 

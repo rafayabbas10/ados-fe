@@ -324,10 +324,16 @@ export default function Dashboard() {
                                 className="w-full h-full object-cover"
                                 poster=""
                                 muted
-                                onMouseEnter={(e) => e.currentTarget.play()}
+                                onMouseEnter={(e) => {
+                                  const video = e.currentTarget;
+                                  video.play().catch(() => {
+                                    // Ignore play errors (e.g., AbortError)
+                                  });
+                                }}
                                 onMouseLeave={(e) => {
-                                  e.currentTarget.pause();
-                                  e.currentTarget.currentTime = 0;
+                                  const video = e.currentTarget;
+                                  video.pause();
+                                  video.currentTime = 0;
                                 }}
                               >
                                 <source src={ad.ad_video_link} type="video/mp4" />
