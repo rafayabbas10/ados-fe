@@ -15,7 +15,8 @@ import {
   Play, 
   BarChart3,
   Calendar,
-  Plus
+  Plus,
+  RefreshCw
 } from "lucide-react";
 import { AuditReport } from "@/types";
 import { fetchReportsByAccountId } from "@/services/reportsService";
@@ -29,6 +30,7 @@ interface TopPerformingAd {
   roas: number;
   total_views: number;
   ad_video_link: string;
+  ad_type: string;
 }
 
 export default function Dashboard() {
@@ -39,6 +41,8 @@ export default function Dashboard() {
   const [adsLoading, setAdsLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshingAds, setRefreshingAds] = useState(false);
   const [formData, setFormData] = useState({
     accountId: '',
     startDate: '',
@@ -46,13 +50,56 @@ export default function Dashboard() {
     topAdsCount: '10'
   });
 
+  // Function to refresh reports data
+  const refreshReports = async (accountId: string, silent: boolean = true) => {
+    if (silent) {
+      setRefreshing(true);
+    }
+    
+    try {
+      console.log("🔄 Refreshing reports for account:", accountId);
+      const reportsData = await fetchReportsByAccountId(accountId);
+      setReports(reportsData);
+      console.log("✅ Reports refreshed:", reportsData.length);
+    } catch (error) {
+      console.error("❌ Failed to refresh reports:", error);
+    } finally {
+      if (silent) {
+        setRefreshing(false);
+      }
+    }
+  };
+
+  // Function to refresh top ads data
+  const refreshTopAds = async (accountId: string, silent: boolean = true) => {
+    if (silent) {
+      setRefreshingAds(true);
+    }
+    
+    try {
+      console.log("🎯 Refreshing top ads for account:", accountId);
+      const topAdsData = await fetchTopPerformingAds(accountId);
+      setTopAds(topAdsData);
+      console.log("✅ Top ads refreshed:", topAdsData.length);
+    } catch (error) {
+      console.error("❌ Failed to refresh top ads:", error);
+    } finally {
+      if (silent) {
+        setRefreshingAds(false);
+      }
+    }
+  };
+
   // Function to fetch top performing ads
   const fetchTopPerformingAds = async (accountId: string) => {
     try {
       console.log("🎯 Loading top performing ads for account:", accountId);
       
+      // Remove 'act_' prefix if present for the webhook call
+      const cleanAccountId = accountId.startsWith('act_') ? accountId.substring(4) : accountId;
+      
       const params = new URLSearchParams({
-        accountId: accountId
+        accountId: cleanAccountId
       });
       
       const webhookUrl = `https://n8n.srv931040.hstgr.cloud/webhook/3fb936fa-2dd7-440c-9f16-d77ea2921754?${params.toString()}`;
@@ -68,8 +115,24 @@ export default function Dashboard() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      const result = await response.json();
-      console.log("✅ Top ads webhook response:", result);
+      // Check if response has content before parsing JSON
+      const responseText = await response.text();
+      console.log("📄 Raw response text:", responseText);
+      
+      if (!responseText || responseText.trim() === '') {
+        console.log("⚠️ Empty response from top ads webhook");
+        return [];
+      }
+      
+      let result;
+      try {
+        result = JSON.parse(responseText);
+        console.log("✅ Top ads webhook response:", result);
+      } catch (parseError) {
+        console.error("❌ Failed to parse JSON response:", parseError);
+        console.error("📄 Response text that failed to parse:", responseText);
+        return [];
+      }
       
       // Process the webhook response
       if (Array.isArray(result)) {
@@ -122,6 +185,40 @@ export default function Dashboard() {
     loadDashboardData();
   }, [selectedAccountId]);
 
+  // Auto-refresh reports every 60 seconds
+  useEffect(() => {
+    if (!selectedAccountId) return;
+
+    console.log("🔄 Setting up auto-refresh for reports every 60 seconds");
+    
+    const interval = setInterval(() => {
+      refreshReports(selectedAccountId, true);
+    }, 60000); // 60 seconds
+
+    // Cleanup interval on unmount or when account changes
+    return () => {
+      console.log("🧹 Cleaning up reports auto-refresh interval");
+      clearInterval(interval);
+    };
+  }, [selectedAccountId]);
+
+  // Auto-refresh top ads every 60 seconds
+  useEffect(() => {
+    if (!selectedAccountId) return;
+
+    console.log("🎯 Setting up auto-refresh for top ads every 60 seconds");
+    
+    const interval = setInterval(() => {
+      refreshTopAds(selectedAccountId, true);
+    }, 60000); // 60 seconds
+
+    // Cleanup interval on unmount or when account changes
+    return () => {
+      console.log("🧹 Cleaning up top ads auto-refresh interval");
+      clearInterval(interval);
+    };
+  }, [selectedAccountId]);
+
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'completed':
@@ -169,6 +266,22 @@ export default function Dashboard() {
     return `${formatDate(start)} - ${formatDate(end)}`;
   };
 
+  // Utility function to detect if ad_video_link is actually an image
+  const isImageUrl = (url: string | null) => {
+    if (!url) return false;
+    const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
+    const lowerUrl = url.toLowerCase();
+    return imageExtensions.some(ext => lowerUrl.includes(ext)) || lowerUrl.includes('fbcdn.net');
+  };
+
+  // Utility function to detect if it's a video
+  const isVideoUrl = (url: string | null) => {
+    if (!url) return false;
+    const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov'];
+    const lowerUrl = url.toLowerCase();
+    return videoExtensions.some(ext => lowerUrl.includes(ext)) || lowerUrl.includes('supabase.co');
+  };
+
   // Set default account when modal opens
   useEffect(() => {
     if (selectedAccountId && !formData.accountId) {
@@ -211,8 +324,7 @@ export default function Dashboard() {
       
       // Refresh reports after generation
       if (selectedAccountId) {
-        const reportsData = await fetchReportsByAccountId(selectedAccountId);
-        setReports(reportsData);
+        await refreshReports(selectedAccountId, false);
       }
     } catch (error) {
       console.error("❌ Failed to start report generation:", error);
@@ -285,7 +397,15 @@ export default function Dashboard() {
               {/* Top Creatives Section */}
               <div className="mb-12">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-semibold text-foreground">Top Performing Creatives</h2>
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-2xl font-semibold text-foreground">Top Performing Creatives</h2>
+                    {refreshingAds && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                        <span>Refreshing...</span>
+                      </div>
+                    )}
+                  </div>
                   <Button variant="outline" className="gap-2">
                     View All
                   </Button>
@@ -320,31 +440,61 @@ export default function Dashboard() {
                           {/* Creative Thumbnail */}
                           <div className="relative bg-muted rounded aspect-video flex items-center justify-center mb-1.5 overflow-hidden">
                             {ad.ad_video_link ? (
-                              <video 
-                                className="w-full h-full object-cover"
-                                poster=""
-                                muted
-                                onMouseEnter={(e) => {
-                                  const video = e.currentTarget;
-                                  video.play().catch(() => {
-                                    // Ignore play errors (e.g., AbortError)
-                                  });
-                                }}
-                                onMouseLeave={(e) => {
-                                  const video = e.currentTarget;
-                                  video.pause();
-                                  video.currentTime = 0;
-                                }}
-                              >
-                                <source src={ad.ad_video_link} type="video/mp4" />
-                                <Play className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors" />
-                              </video>
+                              isImageUrl(ad.ad_video_link) ? (
+                                // Render as image
+                                <div className="relative w-full h-full">
+                                  <img 
+                                    src={ad.ad_video_link}
+                                    alt={ad.name}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      // Fallback to placeholder on error
+                                      e.currentTarget.style.display = 'none';
+                                      e.currentTarget.parentElement?.classList.add('flex', 'items-center', 'justify-center');
+                                    }}
+                                  />
+                                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                    <Play className="h-8 w-8 text-white" />
+                                  </div>
+                                </div>
+                              ) : isVideoUrl(ad.ad_video_link) ? (
+                                // Render as video
+                                <video 
+                                  className="w-full h-full object-cover"
+                                  poster=""
+                                  muted
+                                  onMouseEnter={(e) => {
+                                    const video = e.currentTarget;
+                                    video.play().catch(() => {
+                                      // Ignore play errors (e.g., AbortError)
+                                    });
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    const video = e.currentTarget;
+                                    video.pause();
+                                    video.currentTime = 0;
+                                  }}
+                                >
+                                  <source src={ad.ad_video_link} type="video/mp4" />
+                                </video>
+                              ) : (
+                                // Unknown format fallback
+                                <div className="flex items-center justify-center">
+                                  <Play className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors" />
+                                </div>
+                              )
                             ) : (
                               <Play className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors" />
                             )}
                             <div className="absolute top-1 right-1">
-                              <Badge className="bg-green-500 text-white text-[10px] py-0 px-1">
-                                ACTIVE
+                              <Badge className={`text-white text-[10px] py-0 px-1 uppercase ${
+                                ad.ad_type === 'video' ? 'bg-red-500' :
+                                ad.ad_type === 'image' ? 'bg-blue-500' :
+                                ad.ad_type === 'carousel' ? 'bg-purple-500' :
+                                ad.ad_type === 'collection' ? 'bg-orange-500' :
+                                'bg-gray-500'
+                              }`}>
+                                {ad.ad_type || 'UNKNOWN'}
                               </Badge>
                             </div>
                           </div>
@@ -395,7 +545,15 @@ export default function Dashboard() {
               {/* Audit Reports Section */}
               <div>
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-semibold text-foreground">Audit Reports</h2>
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-2xl font-semibold text-foreground">Audit Reports</h2>
+                    {refreshing && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                        <span>Refreshing...</span>
+                      </div>
+                    )}
+                  </div>
                   <Dialog open={modalOpen} onOpenChange={setModalOpen}>
                     <DialogTrigger asChild>
                       <Button 

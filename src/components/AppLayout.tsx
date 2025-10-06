@@ -15,11 +15,13 @@ import {
   BarChart3,
   Search,
   Calendar,
-  User
+  User,
+  Sparkles
 } from "lucide-react";
 
 const navigationItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Build with AI", url: "/build-ai", icon: Sparkles },
   { title: "Ad Creatives", url: "/creatives", icon: Play },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
   { title: "Settings", url: "/settings", icon: Settings },

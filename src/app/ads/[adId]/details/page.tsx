@@ -303,30 +303,154 @@ export default function AdDetails() {
               <CardHeader className="px-6 py-4">
                 <div className="flex items-center gap-2">
                   <Video className="h-5 w-5 text-primary" />
-                  <span className="text-lg font-semibold">Original Video Creative</span>
+                  <span className="text-lg font-semibold">Original Creative</span>
                 </div>
               </CardHeader>
               <CardContent className="px-6 pb-6">
                 <div className="space-y-4">
-                  {/* Video Player */}
+                  {/* Media Player - Video or Image */}
                   <div className="relative aspect-[9/16] bg-black rounded-lg overflow-hidden">
-                    {ad.analysis?.video_content_link ? (
-                      <video
-                        controls
-                        className="w-full h-full object-contain"
-                        poster={ad.analysis?.breakdown_sheet_link || ""}
-                      >
-                        <source src={ad.analysis.video_content_link} type="video/mp4" />
-                        Your browser does not support the video tag.
-                      </video>
-                    ) : (
-                      <div className="flex items-center justify-center h-full">
-                        <div className="text-center text-white">
-                          <Video className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                          <p className="text-sm opacity-75">Video not available</p>
-                        </div>
-                      </div>
-                    )}
+                    {(() => {
+                      // Check multiple possible sources for media content
+                      const mediaUrl = ad.analysis?.video_content_link || (ad as any).ad_video_link || ad.video_url;
+                      
+                      if (!mediaUrl) {
+                        return (
+                          <div className="flex items-center justify-center h-full">
+                            <div className="text-center text-white">
+                              <Video className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                              <p className="text-sm opacity-75">Media not available</p>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // Detect if it's an image
+                      const isImage = (() => {
+                        const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
+                        const lowerUrl = mediaUrl.toLowerCase();
+                        return imageExtensions.some(ext => lowerUrl.includes(ext)) || lowerUrl.includes('fbcdn.net');
+                      })();
+
+                      // Detect if it's a video
+                      const isVideo = (() => {
+                        const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov'];
+                        const lowerUrl = mediaUrl.toLowerCase();
+                        return videoExtensions.some(ext => lowerUrl.includes(ext)) || lowerUrl.includes('supabase.co');
+                      })();
+
+                      if (isImage) {
+                        return (
+                          <div className="relative w-full h-full">
+                            <img
+                              src={mediaUrl}
+                              alt={ad.creative_name || ad.ad_name || `Ad #${ad.id}`}
+                              className="w-full h-full object-contain"
+                              onError={(e) => {
+                                console.error("Failed to load image:", mediaUrl);
+                                e.currentTarget.style.display = 'none';
+                                const parent = e.currentTarget.parentElement;
+                                if (parent) {
+                                  parent.innerHTML = `
+                                    <div class="flex items-center justify-center h-full">
+                                      <div class="text-center text-white">
+                                        <svg class="h-12 w-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                        </svg>
+                                        <p class="text-sm opacity-75">Image failed to load</p>
+                                      </div>
+                                    </div>
+                                  `;
+                                }
+                              }}
+                            />
+                            <div className="absolute top-2 left-2">
+                              <Badge className="bg-blue-500 text-white text-xs">
+                                IMAGE AD
+                              </Badge>
+                            </div>
+                          </div>
+                        );
+                      } else if (isVideo) {
+                        return (
+                          <div className="relative w-full h-full">
+                            <video
+                              controls
+                              className="w-full h-full object-contain"
+                              poster={ad.analysis?.breakdown_sheet_link || ad.thumbnail_url || ""}
+                              onError={(e) => {
+                                console.error("Failed to load video:", mediaUrl);
+                                const parent = e.currentTarget.parentElement;
+                                if (parent) {
+                                  parent.innerHTML = `
+                                    <div class="flex items-center justify-center h-full">
+                                      <div class="text-center text-white">
+                                        <svg class="h-12 w-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                        </svg>
+                                        <p class="text-sm opacity-75">Video failed to load</p>
+                                      </div>
+                                    </div>
+                                  `;
+                                }
+                              }}
+                            >
+                              <source src={mediaUrl} type="video/mp4" />
+                              <source src={mediaUrl} type="video/webm" />
+                              Your browser does not support the video tag.
+                            </video>
+                            <div className="absolute top-2 left-2">
+                              <Badge className="bg-red-500 text-white text-xs">
+                                VIDEO AD
+                              </Badge>
+                            </div>
+                          </div>
+                        );
+                      } else {
+                        // Unknown format, try to render as video first, then fallback
+                        return (
+                          <div className="relative w-full h-full">
+                            <video
+                              controls
+                              className="w-full h-full object-contain"
+                              poster={ad.analysis?.breakdown_sheet_link || ad.thumbnail_url || ""}
+                              onError={(e) => {
+                                console.error("Failed to load media as video, trying as image:", mediaUrl);
+                                // Try as image
+                                const img = document.createElement('img');
+                                img.src = mediaUrl;
+                                img.className = 'w-full h-full object-contain';
+                                img.alt = ad.creative_name || ad.ad_name || `Ad #${ad.id}`;
+                                img.onload = () => {
+                                  if (e.currentTarget.parentElement) {
+                                    e.currentTarget.parentElement.innerHTML = '';
+                                    e.currentTarget.parentElement.appendChild(img);
+                                  }
+                                };
+                                img.onerror = () => {
+                                  if (e.currentTarget.parentElement) {
+                                    e.currentTarget.parentElement.innerHTML = `
+                                      <div class="flex items-center justify-center h-full">
+                                        <div class="text-center text-white">
+                                          <svg class="h-12 w-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                          </svg>
+                                          <p class="text-sm opacity-75">Media format not supported</p>
+                                        </div>
+                                      </div>
+                                    `;
+                                  }
+                                };
+                              }}
+                            >
+                              <source src={mediaUrl} type="video/mp4" />
+                              <source src={mediaUrl} type="video/webm" />
+                              Your browser does not support the video tag.
+                            </video>
+                          </div>
+                        );
+                      }
+                    })()}
                   </div>
                   
                   {/* View on Facebook Button */}
@@ -888,32 +1012,32 @@ export default function AdDetails() {
                           </Button>
                         </div>
 
-                        <div className="space-y-4">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                           {variations.v1.map((hook) => (
-                            <div key={hook.id} className="p-4 bg-primary/10 border border-primary/20 rounded-lg">
-                              <div className="flex items-start justify-between mb-3">
-                                <Badge variant="secondary" className="text-xs">
+                            <div key={hook.id} className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
+                              <div className="flex items-center justify-between mb-2">
+                                <Badge variant="secondary" className="text-xs px-2 py-0.5">
                                   Hook {hook.hook_num}
                                 </Badge>
-                                <Badge variant="outline" className="text-xs">
-                                  Replaces Scenes: {hook.replace_scenes}
+                                <Badge variant="outline" className="text-xs px-2 py-0.5">
+                                  Scenes: {hook.replace_scenes}
                                 </Badge>
                               </div>
                               
-                              <div className="space-y-3">
+                              <div className="space-y-2">
                                 <div>
-                                  <h5 className="font-medium text-sm mb-1">Script</h5>
-                                  <p className="text-sm text-foreground leading-relaxed">{hook.script}</p>
+                                  <h5 className="font-medium text-xs text-muted-foreground uppercase mb-0.5">Script</h5>
+                                  <p className="text-xs text-foreground leading-tight">{hook.script}</p>
                                 </div>
                                 
                                 <div>
-                                  <h5 className="font-medium text-sm mb-1">Visual Description</h5>
-                                  <p className="text-sm text-muted-foreground leading-relaxed">{hook.visual}</p>
+                                  <h5 className="font-medium text-xs text-muted-foreground uppercase mb-0.5">Visual</h5>
+                                  <p className="text-xs text-muted-foreground leading-tight">{hook.visual}</p>
                                 </div>
                                 
                                 <div>
-                                  <h5 className="font-medium text-sm mb-1">Text Overlay</h5>
-                                  <div className="p-2 bg-muted/50 rounded text-xs font-mono whitespace-pre-line">
+                                  <h5 className="font-medium text-xs text-muted-foreground uppercase mb-0.5">Text Overlay</h5>
+                                  <div className="p-1.5 bg-muted/50 rounded text-[10px] font-mono leading-tight whitespace-pre-line">
                                     {hook.text_overlay}
                                   </div>
                                 </div>

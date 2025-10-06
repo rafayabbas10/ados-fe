@@ -27,8 +27,24 @@ export const fetchReportsByAccountId = async (accountId: string): Promise<AuditR
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     
-    const data = await response.json();
-    console.log("✅ Webhook response:", data);
+    // Check if response has content before parsing JSON
+    const responseText = await response.text();
+    console.log("📄 Raw response text:", responseText);
+    
+    if (!responseText || responseText.trim() === '') {
+      console.log("⚠️ Empty response from reports webhook");
+      return [];
+    }
+    
+    let data;
+    try {
+      data = JSON.parse(responseText);
+      console.log("✅ Webhook response:", data);
+    } catch (parseError) {
+      console.error("❌ Failed to parse JSON response:", parseError);
+      console.error("📄 Response text that failed to parse:", responseText);
+      return [];
+    }
     
     // Handle case where webhook returns a message instead of reports array
     if (!Array.isArray(data)) {
