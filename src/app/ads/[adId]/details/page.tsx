@@ -51,10 +51,6 @@ const SceneImage = ({
     onError?.();
   };
 
-  const handleImgError = () => {
-    setImgError(true);
-    onError?.();
-  };
 
   if (imgError) {
     return (
@@ -80,10 +76,15 @@ const SceneImage = ({
   }
 
   return (
-    <div className={`bg-muted rounded aspect-video flex items-center justify-center ${className}`}>
-      <Video className="h-6 w-6 text-muted-foreground" />
-      <span className="ml-2 text-xs text-muted-foreground">Loading failed</span>
-    </div>
+    <img 
+      src={src} 
+      alt={alt}
+      className={className}
+      onError={() => {
+        setImgError(true);
+        onError?.();
+      }}
+    />
   );
 };
 
@@ -312,7 +313,7 @@ export default function AdDetails() {
                   <div className="relative aspect-[9/16] bg-black rounded-lg overflow-hidden">
                     {(() => {
                       // Check multiple possible sources for media content
-                      const mediaUrl = ad.analysis?.video_content_link || (ad as any).ad_video_link || ad.video_url;
+                      const mediaUrl = ad.analysis?.video_content_link || ad.video_url;
                       
                       if (!mediaUrl) {
                         return (
@@ -327,6 +328,7 @@ export default function AdDetails() {
 
                       // Detect if it's an image
                       const isImage = (() => {
+                        if (!mediaUrl || typeof mediaUrl !== 'string') return false;
                         const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
                         const lowerUrl = mediaUrl.toLowerCase();
                         return imageExtensions.some(ext => lowerUrl.includes(ext)) || lowerUrl.includes('fbcdn.net');
@@ -334,6 +336,7 @@ export default function AdDetails() {
 
                       // Detect if it's a video
                       const isVideo = (() => {
+                        if (!mediaUrl || typeof mediaUrl !== 'string') return false;
                         const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov'];
                         const lowerUrl = mediaUrl.toLowerCase();
                         return videoExtensions.some(ext => lowerUrl.includes(ext)) || lowerUrl.includes('supabase.co');
@@ -343,7 +346,7 @@ export default function AdDetails() {
                         return (
                           <div className="relative w-full h-full">
                             <img
-                              src={mediaUrl}
+                              src={mediaUrl as string}
                               alt={ad.creative_name || ad.ad_name || `Ad #${ad.id}`}
                               className="w-full h-full object-contain"
                               onError={(e) => {
@@ -395,8 +398,8 @@ export default function AdDetails() {
                                 }
                               }}
                             >
-                              <source src={mediaUrl} type="video/mp4" />
-                              <source src={mediaUrl} type="video/webm" />
+                              <source src={mediaUrl as string} type="video/mp4" />
+                              <source src={mediaUrl as string} type="video/webm" />
                               Your browser does not support the video tag.
                             </video>
                             <div className="absolute top-2 left-2">
@@ -443,8 +446,8 @@ export default function AdDetails() {
                                 };
                               }}
                             >
-                              <source src={mediaUrl} type="video/mp4" />
-                              <source src={mediaUrl} type="video/webm" />
+                              <source src={mediaUrl as string} type="video/mp4" />
+                              <source src={mediaUrl as string} type="video/webm" />
                               Your browser does not support the video tag.
                             </video>
                           </div>

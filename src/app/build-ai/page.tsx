@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,13 +11,9 @@ import { useAccount } from "@/contexts/AccountContext";
 import { 
   Sparkles, 
   Play, 
-  BarChart3,
   ChevronDown,
   ChevronRight,
   Video,
-  Eye,
-  Clock,
-  Target,
   Lightbulb,
   Layers,
   Wand2,
@@ -337,14 +333,6 @@ export default function BuildWithAI() {
     }));
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
 
   const getPerformanceColor = (score: number) => {
     if (score >= 85) return 'text-green-600';
@@ -670,7 +658,7 @@ export default function BuildWithAI() {
               <Sparkles className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-foreground mb-2">Ready to Generate Creative Ideas?</h3>
               <p className="text-muted-foreground mb-6">
-                Select a source ad for inspiration and click "Generate Ideas" to create 5 unique creative variations
+                Select a source ad for inspiration and click &ldquo;Generate Ideas&rdquo; to create 5 unique creative variations
               </p>
               <div className="text-sm text-muted-foreground">
                 Each version will include:

@@ -217,7 +217,7 @@ export default function Dashboard() {
       console.log("🧹 Cleaning up top ads auto-refresh interval");
       clearInterval(interval);
     };
-  }, [selectedAccountId]);
+  }, [selectedAccountId, refreshTopAds]);
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
