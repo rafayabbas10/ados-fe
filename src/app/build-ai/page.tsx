@@ -1,355 +1,548 @@
 "use client";
 
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { FileText, Send } from "lucide-react";
+import { toast } from "sonner";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Combobox } from "@/components/ui/combobox";
 import { AppLayout } from "@/components/AppLayout";
 import { useAccount } from "@/contexts/AccountContext";
-import { 
-  Sparkles, 
-  Play, 
-  ChevronDown,
-  ChevronRight,
-  Video,
-  Lightbulb,
-  Layers,
-  Wand2,
-  RefreshCw
-} from "lucide-react";
+import { ScriptVariations, ScriptVariation } from "@/components/ui/ScriptVariations";
+import { Creative } from "@/services/creativesService";
+import { fetchVideoScenes, fetchAdDetails } from "@/services/adDetailsService";
+import { VideoScene, HookVariation, VideoSceneVariation } from "@/types";
 
-// Types for the Build with AI Generator
-interface SourceAd {
+interface BriefData {
   id: string;
-  name: string;
-  video_url: string;
-  thumbnail: string;
-  ad_type?: string;
-  performance: {
-    views: number;
-    roas: number;
-    spend: number;
+  title: string;
+  creativeId?: number;
+  avatar?: string;
+  awarenessLevel?: string;
+  angle?: string;
+  format?: string;
+  theme?: string;
+  scriptBlocks?: ScriptBlock[];
+}
+
+interface ScriptBlock {
+  id: string;
+  type: string;
+  scriptLine: string;
+  audioType: string;
+  sceneDescription: string;
+  visualInspo: string;
+  textOverlays: string[];
+  order: number;
+}
+
+interface BriefBuilderData {
+  adId: string;
+  adName: string;
+  videoScenes: VideoScene[];
+  variationType: string;
+  selectedHooks?: HookVariation[];
+  variationBlocks?: VideoSceneVariation[];
+  adAnalysis?: {
+    avatar?: string;
+    market_awareness?: string;
+    angle?: string;
+    format?: string;
+    theme?: string;
+    video_content_link?: string;
   };
 }
 
-interface GeneratedIdeaSource {
-  concept: string;
-  target_audience: string;
-  pain_point: string;
-  solution_angle: string;
-  emotional_trigger: string;
-}
-
-interface GeneratedElement {
-  type: 'hook' | 'visual' | 'cta' | 'text' | 'audio';
-  content: string;
-  rationale: string;
-  psychological_trigger: string;
-  estimated_performance: number;
-}
-
-interface GeneratedBlock {
-  scene_number: number;
-  timestamp: string;
-  duration: number;
-  scene_type: 'hook' | 'problem' | 'solution' | 'proof' | 'cta';
-  description: string;
-  visual_elements: string[];
-  script: string;
-  purpose: string;
-}
-
-interface GeneratedVersion {
-  version: string;
-  idea_source: GeneratedIdeaSource;
-  elements: GeneratedElement[];
-  blocks: GeneratedBlock[];
-  overall_strategy: string;
-  estimated_performance: {
-    engagement_score: number;
-    conversion_potential: number;
-    virality_factor: number;
-  };
-}
-
-export default function BuildWithAI() {
+function BriefBuilderContent() {
   const { selectedAccountId } = useAccount();
-  const [selectedSourceAd, setSelectedSourceAd] = useState<string>("");
-  const [activeVersion, setActiveVersion] = useState("v1");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedVersions, setGeneratedVersions] = useState<Record<string, GeneratedVersion>>({});
-  const [expandedSections, setExpandedSections] = useState({
-    ideaSource: true,
-    elements: true,
-    blocks: true
-  });
-
-  // Available source ads for inspiration
-  const [availableSourceAds] = useState<SourceAd[]>([
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const creativeId = searchParams.get('creativeId');
+  
+  const [selectedBrief, setSelectedBrief] = useState<BriefData | null>(null);
+  const [showMetadata, setShowMetadata] = useState(false);
+  const [activeVariation, setActiveVariation] = useState('var-1');
+  
+  // Variable selector states
+  const [briefName, setBriefName] = useState("");
+  const [assignTo, setAssignTo] = useState("");
+  const [avatar, setAvatar] = useState("");
+  const [awarenessLevel, setAwarenessLevel] = useState("");
+  const [angle, setAngle] = useState("");
+  const [format, setFormat] = useState("");
+  const [theme, setTheme] = useState("");
+  
+  const [scriptVariations, setScriptVariations] = useState<ScriptVariation[]>([
     {
-      id: "1",
-      name: "Summer Sale Campaign - Video Ad",
-      video_url: "https://example.com/video1.mp4",
-      thumbnail: "https://via.placeholder.com/300x200",
-      performance: {
-        views: 125000,
-        roas: 4.2,
-        spend: 2500
-      }
-    },
-    {
-      id: "2", 
-      name: "Product Demo - Mobile First",
-      video_url: "https://example.com/video2.mp4",
-      thumbnail: "https://via.placeholder.com/300x200",
-      performance: {
-        views: 89000,
-        roas: 3.8,
-        spend: 1800
-      }
-    },
-    {
-      id: "3",
-      name: "Brand Awareness - Lifestyle",
-      video_url: "https://example.com/video3.mp4", 
-      thumbnail: "https://via.placeholder.com/300x200",
-      performance: {
-        views: 67000,
-        roas: 3.2,
-        spend: 1200
-      }
+      id: 'var-1',
+      name: 'Version A',
+      status: 'primary' as const,
+      blocks: []
     }
   ]);
 
-  // Mock generated versions - replace with actual AI generation
-  const mockGeneratedVersions: Record<string, GeneratedVersion> = {
-    v1: {
-      version: "V1 - Problem-Solution Focus",
-      idea_source: {
-        concept: "Pain Point Amplification",
-        target_audience: "Busy professionals aged 25-40",
-        pain_point: "Lack of time for self-care and wellness",
-        solution_angle: "Quick, effective solutions that fit into busy schedules",
-        emotional_trigger: "Fear of missing out on health and happiness"
-      },
-      elements: [
-        {
-          type: 'hook',
-          content: "Still using outdated methods that waste your precious time?",
-          rationale: "Creates immediate relevance and urgency",
-          psychological_trigger: "Loss aversion and time scarcity",
-          estimated_performance: 87
-        },
-        {
-          type: 'visual',
-          content: "Split-screen: Chaotic morning vs. Organized, calm morning",
-          rationale: "Visual contrast shows transformation clearly",
-          psychological_trigger: "Aspiration and social comparison",
-          estimated_performance: 82
-        },
-        {
-          type: 'cta',
-          content: "Transform Your Mornings in 7 Days",
-          rationale: "Specific timeframe creates urgency and believability",
-          psychological_trigger: "Instant gratification and achievement",
-          estimated_performance: 79
-        }
-      ],
-      blocks: [
-        {
-          scene_number: 1,
-          timestamp: "0:00-0:03",
-          duration: 3,
-          scene_type: 'hook',
-          description: "Pattern interrupt with relatable struggle",
-          visual_elements: ["Close-up of frustrated face", "Messy background", "Clock showing early time"],
-          script: "Another morning feeling overwhelmed before you even start?",
-          purpose: "Immediately grab attention with universal pain point"
-        },
-        {
-          scene_number: 2,
-          timestamp: "0:03-0:08",
-          duration: 5,
-          scene_type: 'problem',
-          description: "Amplify the problem with consequences",
-          visual_elements: ["Montage of chaotic scenes", "Stress indicators", "Time pressure visuals"],
-          script: "You're not alone. 73% of professionals start their day stressed, affecting their entire performance.",
-          purpose: "Build emotional connection and validate the problem"
-        },
-        {
-          scene_number: 3,
-          timestamp: "0:08-0:15",
-          duration: 7,
-          scene_type: 'solution',
-          description: "Introduce the solution with transformation",
-          visual_elements: ["Smooth transition", "Organized environment", "Calm, confident person"],
-          script: "But what if I told you there's a simple system that transforms your mornings in just 7 days?",
-          purpose: "Present hope and specific solution"
-        },
-        {
-          scene_number: 4,
-          timestamp: "0:15-0:20",
-          duration: 5,
-          scene_type: 'proof',
-          description: "Social proof and results",
-          visual_elements: ["Testimonial clips", "Before/after shots", "Statistics overlay"],
-          script: "Over 10,000 people have already transformed their lives. Here's what they're saying...",
-          purpose: "Build credibility and trust"
-        },
-        {
-          scene_number: 5,
-          timestamp: "0:20-0:25",
-          duration: 5,
-          scene_type: 'cta',
-          description: "Clear call to action with urgency",
-          visual_elements: ["Product/service showcase", "Limited time indicator", "Easy action steps"],
-          script: "Ready to join them? Click below to start your 7-day transformation today.",
-          purpose: "Drive immediate action"
-        }
-      ],
-      overall_strategy: "Focus on immediate pain point recognition followed by clear transformation promise with social proof",
-      estimated_performance: {
-        engagement_score: 85,
-        conversion_potential: 78,
-        virality_factor: 72
+  // Load creative data when component mounts or creativeId changes
+  useEffect(() => {
+    if (creativeId) {
+      const creativeData = localStorage.getItem('selectedCreative');
+      if (creativeData) {
+        const creative: Creative = JSON.parse(creativeData);
+        populateFromCreative(creative);
+        // Clear localStorage after loading
+        localStorage.removeItem('selectedCreative');
       }
-    },
-    v2: {
-      version: "V2 - Curiosity-Driven Approach",
-      idea_source: {
-        concept: "Secret Knowledge Revelation",
-        target_audience: "Achievement-oriented individuals 30-50",
-        pain_point: "Feeling stuck despite trying everything",
-        solution_angle: "Insider knowledge that others don't have",
-        emotional_trigger: "Curiosity and exclusivity"
-      },
-      elements: [
-        {
-          type: 'hook',
-          content: "The one thing successful people do differently (and why no one talks about it)",
-          rationale: "Creates curiosity gap and positions viewer as insider",
-          psychological_trigger: "Curiosity and social proof",
-          estimated_performance: 91
-        },
-        {
-          type: 'visual',
-          content: "Mysterious figure revealing hidden information",
-          rationale: "Visual metaphor for exclusive knowledge",
-          psychological_trigger: "Exclusivity and mystery",
-          estimated_performance: 86
-        },
-        {
-          type: 'cta',
-          content: "Discover the Secret (Limited Access)",
-          rationale: "Maintains mystery while creating scarcity",
-          psychological_trigger: "FOMO and exclusivity",
-          estimated_performance: 83
+    }
+  }, [creativeId]);
+
+  // Load variation data from session storage
+  useEffect(() => {
+    const briefData = sessionStorage.getItem('briefBuilderData');
+    if (briefData) {
+      try {
+        const data = JSON.parse(briefData);
+        console.log('📊 Brief Builder Data:', data);
+        
+        if (data.variationType === 'v1') {
+          // Handle v1 - Hook variations
+          populateFromHookVariations(data);
+        } else if (['v2', 'v3', 'v4', 'v5'].includes(data.variationType)) {
+          // Handle v2-v5 - Video scene variations
+          populateFromVideoVariations(data);
         }
-      ],
-      blocks: [
-        {
-          scene_number: 1,
-          timestamp: "0:00-0:04",
-          duration: 4,
-          scene_type: 'hook',
-          description: "Intriguing question that creates curiosity gap",
-          visual_elements: ["Silhouette of successful person", "Question mark overlay", "Mysterious lighting"],
-          script: "What if I told you the most successful people have one secret habit that changes everything?",
-          purpose: "Create immediate curiosity and engagement"
-        },
-        {
-          scene_number: 2,
-          timestamp: "0:04-0:10",
-          duration: 6,
-          scene_type: 'problem',
-          description: "Reveal why most people fail",
-          visual_elements: ["Common failure scenarios", "Frustrated people", "Crossed-out methods"],
-          script: "Most people try the obvious strategies everyone talks about. But here's why they don't work...",
-          purpose: "Position common knowledge as insufficient"
-        },
-        {
-          scene_number: 3,
-          timestamp: "0:10-0:18",
-          duration: 8,
-          scene_type: 'solution',
-          description: "Reveal the secret method",
-          visual_elements: ["Lightbulb moment", "Behind-the-scenes footage", "Success transformation"],
-          script: "The secret? It's not what you do, it's when and how you do it. Let me show you...",
-          purpose: "Deliver on the curiosity promise"
-        },
-        {
-          scene_number: 4,
-          timestamp: "0:18-0:23",
-          duration: 5,
-          scene_type: 'proof',
-          description: "Evidence and case studies",
-          visual_elements: ["Success stories", "Data visualization", "Expert endorsements"],
-          script: "This method has been tested by thousands, with a 94% success rate. Here's the proof...",
-          purpose: "Validate the secret with concrete evidence"
-        },
-        {
-          scene_number: 5,
-          timestamp: "0:23-0:28",
-          duration: 5,
-          scene_type: 'cta',
-          description: "Exclusive access offer",
-          visual_elements: ["VIP access visual", "Limited spots counter", "Exclusive badge"],
-          script: "Ready to join the inner circle? Limited spots available. Click now to secure your access.",
-          purpose: "Maintain exclusivity while driving action"
-        }
-      ],
-      overall_strategy: "Build curiosity through secret knowledge positioning, then deliver exclusive solution with proof",
-      estimated_performance: {
-        engagement_score: 92,
-        conversion_potential: 85,
-        virality_factor: 88
+        
+        // Clear sessionStorage after loading
+        sessionStorage.removeItem('briefBuilderData');
+      } catch (error) {
+        console.error('Error parsing brief builder data:', error);
       }
+    }
+  }, []);
+
+  // Handler for v1 - Hook variations
+  const populateFromHookVariations = (data: BriefBuilderData) => {
+    // Set brief name
+    setBriefName(data.adName || 'Hook Variation Brief');
+    
+    // Map AdAnalysis fields to Variable Selector
+    if (data.adAnalysis) {
+      setAvatar(data.adAnalysis.avatar || '');
+      setAwarenessLevel(data.adAnalysis.market_awareness || '');
+      setAngle(data.adAnalysis.angle || '');
+      setFormat(data.adAnalysis.format || 'UGC Video');
+      setTheme(data.adAnalysis.theme || '');
+    }
+
+    // For each selected hook, create a variation with original scenes but hook replaced
+    const newVariations: ScriptVariation[] = (data.selectedHooks || []).map((hook, index: number) => {
+      // Parse which scenes to replace from the hook
+      const scenesToReplace = parseScenesToReplace(hook.replace_scenes);
+      
+      // Create blocks from original video scenes
+      const blocks = data.videoScenes.map((scene: VideoScene, sceneIndex: number) => {
+        // Check if this scene should be replaced by the hook
+        const shouldReplace = scenesToReplace.includes(scene.scene);
+        
+        if (shouldReplace) {
+          // Replace with hook data
+          return {
+            id: `block-${Date.now()}-${sceneIndex + 1}-hook-${hook.id}`,
+            type: 'Curiosity/Intrigue Hook',
+            scriptLine: hook.script || '',
+            audioType: 'Creator VO',
+            sceneDescription: hook.visual || '',
+            visualInspo: data.adAnalysis?.video_content_link || '',
+            textOverlays: hook.text_overlay ? [hook.text_overlay] : [],
+            order: sceneIndex + 1
+          };
+        } else {
+          // Keep original scene
+          return {
+            id: `block-${Date.now()}-${sceneIndex + 1}`,
+            type: getBlockTypeFromScene(scene, sceneIndex, data.videoScenes.length),
+            scriptLine: scene.script || scene.description || '',
+            audioType: 'Creator VO',
+            sceneDescription: scene.description || scene.visual || scene.visual_elements || '',
+            visualInspo: scene.screenshot_url || scene.thumbnail_url || '',
+            textOverlays: scene.text_overlay ? [scene.text_overlay] : [],
+            order: sceneIndex + 1
+          };
+        }
+      });
+
+      const status: 'primary' | 'draft' = index === 0 ? 'primary' : 'draft';
+      return {
+        id: `var-hook-${hook.id}`,
+        name: `Hook ${hook.hook_num}`,
+        status: status,
+        blocks: blocks
+      };
+    });
+
+    setScriptVariations(newVariations);
+    setActiveVariation(newVariations[0]?.id || 'var-1');
+  };
+
+  // Handler for v2-v5 - Video scene variations
+  const populateFromVideoVariations = (data: BriefBuilderData) => {
+    // Set brief name
+    setBriefName(data.adName || `${data.variationType.toUpperCase()} Variation Brief`);
+    
+    // Map AdAnalysis fields to Variable Selector
+    if (data.adAnalysis) {
+      setAvatar(data.adAnalysis.avatar || '');
+      setAwarenessLevel(data.adAnalysis.market_awareness || '');
+      setAngle(data.adAnalysis.angle || '');
+      setFormat(data.adAnalysis.format || 'UGC Video');
+      setTheme(data.adAnalysis.theme || '');
+    }
+
+    // Create blocks directly from variation data
+    const variationBlocks = data.variationBlocks || [];
+    const blocks = variationBlocks.map((scene, index: number) => ({
+      id: `block-${Date.now()}-${index + 1}`,
+      type: getBlockTypeFromVariationScene(scene, index, variationBlocks.length),
+      scriptLine: scene.script || '',
+      audioType: 'Creator VO',
+      sceneDescription: scene.visual || '',
+      visualInspo: data.adAnalysis?.video_content_link || '',
+      textOverlays: scene.text_overlay ? [scene.text_overlay] : [],
+      order: index + 1
+    }));
+
+    const newVariation: ScriptVariation = {
+      id: `var-${data.variationType}`,
+      name: `${data.variationType.toUpperCase()} - Version A`,
+      status: 'primary' as const,
+      blocks: blocks
+    };
+
+    setScriptVariations([newVariation]);
+    setActiveVariation(newVariation.id);
+  };
+
+  // Helper to parse scenes to replace (e.g., "1,2" or "1-3")
+  const parseScenesToReplace = (replaceScenes: string): number[] => {
+    const scenes: number[] = [];
+    
+    if (!replaceScenes) return scenes;
+    
+    const parts = replaceScenes.split(',').map(s => s.trim());
+    
+    for (const part of parts) {
+      if (part.includes('-')) {
+        // Range like "1-3"
+        const [start, end] = part.split('-').map(Number);
+        for (let i = start; i <= end; i++) {
+          scenes.push(i);
+        }
+      } else {
+        // Single number like "1"
+        scenes.push(Number(part));
+      }
+    }
+    
+    return scenes;
+  };
+
+  // Helper to determine block type from variation scene
+  const getBlockTypeFromVariationScene = (scene: VideoSceneVariation, index: number, totalScenes: number) => {
+    // Check value_block_type from the data
+    if (scene.value_block_type) {
+      const typeMap: Record<string, string> = {
+        'hook': 'Curiosity/Intrigue Hook',
+        'problem': 'Summarized Problem',
+        'solution': 'Primary Benefit',
+        'benefit': 'Primary Benefit',
+        'social_proof': 'Credibility',
+        'cta': 'CTA (Call to Action)',
+        'empathy': 'Empathy',
+        'after': 'After',
+      };
+      return typeMap[scene.value_block_type.toLowerCase()] || 'Curiosity/Intrigue Hook';
+    }
+    
+    // Default pattern based on position
+    if (index === 0) return 'Curiosity/Intrigue Hook';
+    if (index === 1) return 'Summarized Problem';
+    if (index === totalScenes - 1) return 'CTA (Call to Action)';
+    return 'Primary Benefit';
+  };
+
+  const populateFromCreative = async (creative: Creative): Promise<void> => {
+    // Set brief name from creative name
+    setBriefName(creative.name);
+    
+    // Fetch ad details to get analysis data
+    const adDetails = await fetchAdDetails(creative.id.toString());
+    
+    // Map AdAnalysis fields to Variable Selector
+    if (adDetails?.analysis) {
+      setAvatar(adDetails.analysis.avatar || '');
+      setAwarenessLevel(adDetails.analysis.market_awareness || '');
+      setAngle(adDetails.analysis.angle || '');
+      setFormat(adDetails.analysis.format || (creative.ad_type === 'video' ? 'UGC Video' : 'Static Image'));
+      setTheme(adDetails.analysis.theme || '');
+    } else {
+      // Fallback if no analysis data
+      setFormat(creative.ad_type === 'video' ? 'UGC Video' : 'Static Image');
+    }
+
+    // Fetch video scenes if it's a video ad
+    let scriptBlocks: ScriptBlock[] = [];
+    
+    if (creative.ad_type === 'video') {
+      try {
+        console.log('Fetching video scenes for ad:', creative.id);
+        const videoScenes = await fetchVideoScenes(creative.id.toString());
+        console.log('Video scenes fetched:', videoScenes);
+        
+        if (videoScenes && videoScenes.length > 0) {
+          // Create script blocks from all video scenes
+          scriptBlocks = videoScenes.map((scene, index: number) => ({
+            id: `block-${Date.now()}-${index + 1}`,
+            type: getBlockTypeFromScene(scene, index, videoScenes.length),
+            scriptLine: scene.script || scene.description || '',
+            audioType: 'Creator VO',
+            sceneDescription: scene.description || scene.visual || scene.visual_elements || '',
+            visualInspo: scene.thumbnail_url || scene.screenshot_url || creative.ad_video_link,
+            textOverlays: scene.text_overlay ? [scene.text_overlay] : [],
+            order: index + 1
+          }));
+        }
+      } catch (error) {
+        console.error('Error fetching video scenes:', error);
+      }
+    }
+
+    // Fallback to single block if no scenes found
+    if (scriptBlocks.length === 0) {
+      scriptBlocks = [{
+        id: `block-${Date.now()}-1`,
+        type: 'Curiosity/Intrigue Hook',
+        scriptLine: creative.hook.split('\n')[0],
+        audioType: 'Creator VO',
+        sceneDescription: creative.hook.split('\n-')[1]?.trim() || '',
+        visualInspo: creative.ad_video_link,
+        textOverlays: [],
+        order: 1
+      }];
+    }
+
+    const newBrief = {
+      id: `brief-${Date.now()}`,
+      title: briefName || creative.name,
+      creativeId: creative.id,
+      avatar: avatar,
+      awarenessLevel: awarenessLevel,
+      angle: angle,
+      format: format,
+      theme: theme,
+      scriptBlocks: scriptBlocks
+    };
+
+    setSelectedBrief(newBrief);
+    
+    const initialVariation = {
+      id: 'var-1',
+      name: 'Version A',
+      status: 'primary' as const,
+      blocks: scriptBlocks
+    };
+    
+    setScriptVariations([initialVariation]);
+    setActiveVariation(initialVariation.id);
+  };
+
+  // Helper function to determine block type from scene
+  const getBlockTypeFromScene = (scene: VideoScene, index: number, totalScenes: number) => {
+    // First scene is usually the hook
+    if (index === 0) return 'Curiosity/Intrigue Hook';
+    
+    // Check value_block_type from the data
+    if (scene.value_block_type) {
+      const typeMap: Record<string, string> = {
+        'hook': 'Curiosity/Intrigue Hook',
+        'problem': 'Summarized Problem',
+        'solution': 'Primary Benefit',
+        'benefit': 'Primary Benefit',
+        'social_proof': 'Credibility',
+        'cta': 'CTA (Call to Action)',
+        'empathy': 'Empathy',
+        'after': 'After',
+      };
+      return typeMap[scene.value_block_type.toLowerCase()] || 'Curiosity/Intrigue Hook';
+    }
+    
+    // Default pattern based on position
+    if (index === 1) return 'Summarized Problem';
+    if (index === totalScenes - 1) return 'CTA (Call to Action)';
+    return 'Primary Benefit';
+  };
+
+  const handleGenerateBrief = () => {
+    // Create brief with current variable selector values
+    const newBrief = {
+      id: `brief-${Date.now()}`,
+      title: briefName || `${avatar || 'New Brief'} - ${angle || theme || 'Untitled'}`,
+      avatar: avatar,
+      awarenessLevel: awarenessLevel,
+      angle: angle,
+      format: format,
+      theme: theme,
+      scriptBlocks: []
+    };
+
+    setSelectedBrief(newBrief);
+  };
+
+  const generateNamingConvention = () => {
+    const parts = [avatar, angle, format, theme].filter(Boolean);
+    return parts.join('_').replace(/\s+/g, '_') || `Brief_${Date.now()}`;
+  };
+
+  // Script Variations Handlers
+  const handleUpdateVariation = (variationId: string, blocks: ScriptBlock[]) => {
+    setScriptVariations(prev => 
+      prev.map(variation =>
+        variation.id === variationId ? { ...variation, blocks } : variation
+      )
+    );
+  };
+
+  const handleDeleteVariation = (variationId: string) => {
+    if (scriptVariations.length <= 1) {
+      alert('You must have at least one variation');
+      return;
+    }
+    setScriptVariations(prev => prev.filter(v => v.id !== variationId));
+    // Set active variation to first remaining variation
+    const remaining = scriptVariations.filter(v => v.id !== variationId);
+    if (remaining.length > 0) {
+      setActiveVariation(remaining[0].id);
     }
   };
 
-  // Generate AI versions function
-  const generateVersions = async () => {
-    if (!selectedSourceAd) {
-      alert('Please select a source ad first');
+  const handleCloneVariation = (variationId: string) => {
+    const variationToClone = scriptVariations.find(v => v.id === variationId);
+    if (!variationToClone) return;
+    
+    const newVariation: ScriptVariation = {
+      ...variationToClone,
+      id: `var-${Date.now()}`,
+      name: `${variationToClone.name} Copy`,
+      status: 'draft' as const,
+      blocks: variationToClone.blocks.map(block => ({ ...block, id: `block-${Date.now()}-${Math.random()}` }))
+    };
+    
+    setScriptVariations(prev => [...prev, newVariation]);
+    setActiveVariation(newVariation.id);
+  };
+
+  const handleSetPrimary = (variationId: string) => {
+    setScriptVariations(prev =>
+      prev.map(variation => ({
+        ...variation,
+        status: variation.id === variationId ? 'primary' as const : 'draft' as const
+      }))
+    );
+  };
+
+  const handlePushToProduction = async (variationId: string) => {
+    if (!selectedAccountId) {
+      toast.error('Please select an ad account first');
       return;
     }
 
-    setIsGenerating(true);
-    
-    // Simulate AI generation delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // For now, use mock data - replace with actual AI API calls
-    setGeneratedVersions(mockGeneratedVersions);
-    setIsGenerating(false);
+    // Show loading toast
+    const loadingToast = toast.loading('Pushing brief to production...');
+
+    try {
+      // Prepare the payload
+      const payload = {
+        accountId: selectedAccountId,
+        briefName: briefName,
+        assignTo: assignTo,
+        variableSelector: {
+          avatar: avatar,
+          awarenessLevel: awarenessLevel,
+          angle: angle,
+          format: format,
+          theme: theme
+        },
+        scriptBuilder: {
+          variations: scriptVariations.map(variation => ({
+            id: variation.id,
+            name: variation.name,
+            status: variation.status,
+            blocks: variation.blocks.map(block => ({
+              id: block.id,
+              type: block.type,
+              scriptLine: block.scriptLine,
+              audioType: block.audioType,
+              sceneDescription: block.sceneDescription,
+              visualInspo: block.visualInspo,
+              textOverlays: block.textOverlays,
+              order: block.order
+            }))
+          }))
+        },
+        selectedBrief: selectedBrief
+      };
+
+      console.log('Pushing brief to production workflow:', payload);
+
+      // Make POST request to webhook
+      const response = await fetch('https://n8n.srv931040.hstgr.cloud/webhook/3b8017b9-1358-4dd6-8c59-7267e79307a0', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to push brief: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('Brief pushed successfully:', result);
+
+      // Update the brief status in the variations
+      setScriptVariations(prev =>
+        prev.map(v => ({ ...v, status: 'ready' as const }))
+      );
+
+      // Dismiss loading toast and show success
+      toast.success('Brief pushed to production successfully!', {
+        id: loadingToast,
+        description: 'Redirecting to workflow...',
+      });
+      
+      // Navigate to workflow page after a short delay
+      setTimeout(() => {
+        router.push('/workflow');
+      }, 1000);
+    } catch (error) {
+      console.error('Error pushing brief to production:', error);
+      toast.error('Failed to push brief to production', {
+        id: loadingToast,
+        description: 'Please try again.',
+      });
+    }
   };
 
-  const toggleSection = (section: keyof typeof expandedSections) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
-  };
-
-
-  const getPerformanceColor = (score: number) => {
-    if (score >= 85) return 'text-green-600';
-    if (score >= 70) return 'text-blue-600';
-    if (score >= 60) return 'text-yellow-600';
-    return 'text-red-600';
-  };
-
-  const getSceneTypeColor = (type: string) => {
-    const colors = {
-      hook: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
-      problem: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
-      solution: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-      proof: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
-      cta: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300'
+  const handleAddVariation = () => {
+    const newVariation: ScriptVariation = {
+      id: `var-${Date.now()}`,
+      name: `Version ${String.fromCharCode(65 + scriptVariations.length)}`,
+      status: 'draft' as const,
+      blocks: []
     };
-    return colors[type as keyof typeof colors] || 'bg-gray-100 text-gray-700';
+    
+    setScriptVariations(prev => [...prev, newVariation]);
+    setActiveVariation(newVariation.id);
   };
 
   if (!selectedAccountId) {
@@ -357,10 +550,10 @@ export default function BuildWithAI() {
       <AppLayout>
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center">
-            <Sparkles className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+            <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-foreground mb-2">Select an Account</h3>
             <p className="text-muted-foreground">
-              Please select an ad account from the sidebar to start building with AI
+              Please select an ad account from the sidebar to start building briefs
             </p>
           </div>
         </div>
@@ -371,316 +564,201 @@ export default function BuildWithAI() {
   return (
     <AppLayout>
       <div className="p-6">
-        {/* Page Header */}
+        {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <Sparkles className="h-8 w-8 text-primary" />
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+              <FileText className="w-6 h-6 text-primary" />
+            </div>
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Build with AI</h1>
-              <p className="text-muted-foreground text-lg">
-                Generate new creative ideas with AI-powered inspiration
+              <h1 className="text-3xl font-bold text-foreground">Brief Builder</h1>
+              <p className="text-muted-foreground">
+                Create and manage creative briefs for your campaigns
               </p>
             </div>
           </div>
         </div>
 
-        {/* Generator Controls */}
-        <Card className="shadow-card mb-8">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Wand2 className="h-5 w-5" />
-              Creative Generator
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-end gap-4">
-              <div className="flex-1">
-                <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                  Select Source Ad for Inspiration
-                </label>
-                <Select value={selectedSourceAd} onValueChange={setSelectedSourceAd}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose an ad to inspire new ideas..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableSourceAds.map((ad) => (
-                      <SelectItem key={ad.id} value={ad.id}>
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-6 bg-gradient-to-br from-blue-400 to-purple-500 rounded flex items-center justify-center">
-                            <Play className="h-3 w-3 text-white" />
-                          </div>
-                          <div>
-                            <p className="font-medium">{ad.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {(ad.performance.views / 1000).toFixed(0)}K views • {ad.performance.roas.toFixed(1)}x ROAS
-                            </p>
-                          </div>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button 
-                onClick={generateVersions}
-                disabled={!selectedSourceAd || isGenerating}
-                className="bg-gradient-primary hover:opacity-90 transition-opacity gap-2"
-              >
-                {isGenerating ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-4 w-4" />
-                    Generate Ideas
-                  </>
-                )}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Generated Versions Tabs */}
-        {Object.keys(generatedVersions).length > 0 && (
-          <Tabs value={activeVersion} onValueChange={setActiveVersion}>
-            <TabsList className="grid w-full grid-cols-5 mb-8">
-              <TabsTrigger value="v1">Version 1</TabsTrigger>
-              <TabsTrigger value="v2">Version 2</TabsTrigger>
-              <TabsTrigger value="v3">Version 3</TabsTrigger>
-              <TabsTrigger value="v4">Version 4</TabsTrigger>
-              <TabsTrigger value="v5">Version 5</TabsTrigger>
-            </TabsList>
-            
-            {Object.entries(generatedVersions).map(([version, versionData]) => (
-              <TabsContent key={version} value={version}>
                 <div className="space-y-6">
-                  {/* Version Header */}
+          {/* Variable Selector */}
                   <Card className="shadow-card">
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-xl">{versionData.version}</CardTitle>
-                        <div className="flex items-center gap-4">
-                          <div className="text-center">
-                            <p className="text-xs text-muted-foreground">Engagement</p>
-                            <p className={`font-bold ${getPerformanceColor(versionData.estimated_performance.engagement_score)}`}>
-                              {versionData.estimated_performance.engagement_score}%
-                            </p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-xs text-muted-foreground">Conversion</p>
-                            <p className={`font-bold ${getPerformanceColor(versionData.estimated_performance.conversion_potential)}`}>
-                              {versionData.estimated_performance.conversion_potential}%
-                            </p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-xs text-muted-foreground">Virality</p>
-                            <p className={`font-bold ${getPerformanceColor(versionData.estimated_performance.virality_factor)}`}>
-                              {versionData.estimated_performance.virality_factor}%
-                            </p>
-                          </div>
+            <div className="p-6">
+              <h3 className="text-xl font-semibold text-foreground mb-6">Variable Selector</h3>
+              
+              <div className="space-y-4">
+                {/* Brief Name & Assign To - Two Columns */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Brief Name</label>
+                    <Input
+                      value={briefName}
+                      onChange={(e) => setBriefName(e.target.value)}
+                      placeholder="Enter brief name..."
+                      className="w-full"
+                    />
                         </div>
-                      </div>
-                      <p className="text-muted-foreground">{versionData.overall_strategy}</p>
-                    </CardHeader>
-                  </Card>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Idea Source */}
-                    <Card className="shadow-card">
-                      <CardHeader 
-                        className="cursor-pointer"
-                        onClick={() => toggleSection('ideaSource')}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="h-8 w-8 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
-                              <Lightbulb className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                            </div>
-                            <CardTitle className="text-lg">Idea Source</CardTitle>
-                          </div>
-                          {expandedSections.ideaSource ? (
-                            <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                          ) : (
-                            <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                          )}
-                        </div>
-                      </CardHeader>
-                      
-                      {expandedSections.ideaSource && (
-                        <CardContent className="space-y-4">
-                          <div className="space-y-3">
-                            <div>
-                              <p className="text-sm font-medium text-muted-foreground mb-1">Concept</p>
-                              <p className="text-sm">{versionData.idea_source.concept}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-muted-foreground mb-1">Target Audience</p>
-                              <p className="text-sm">{versionData.idea_source.target_audience}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-muted-foreground mb-1">Pain Point</p>
-                              <p className="text-sm">{versionData.idea_source.pain_point}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-muted-foreground mb-1">Solution Angle</p>
-                              <p className="text-sm">{versionData.idea_source.solution_angle}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-muted-foreground mb-1">Emotional Trigger</p>
-                              <p className="text-sm">{versionData.idea_source.emotional_trigger}</p>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Assign To</label>
+                    <Input
+                      value={assignTo}
+                      onChange={(e) => setAssignTo(e.target.value)}
+                      placeholder="Enter assignee name..."
+                      className="w-full"
+                    />
                             </div>
                           </div>
-                        </CardContent>
-                      )}
-                    </Card>
 
-                    {/* Elements */}
-                    <Card className="shadow-card">
-                      <CardHeader 
-                        className="cursor-pointer"
-                        onClick={() => toggleSection('elements')}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="h-8 w-8 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center">
-                              <Layers className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                            </div>
-                            <CardTitle className="text-lg">Elements</CardTitle>
-                          </div>
-                          {expandedSections.elements ? (
-                            <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                          ) : (
-                            <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                          )}
+                {/* Other Variables - Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">
+                      Avatar <span className="text-xs text-muted-foreground">(Audience Demographics)</span>
+                    </label>
+                    <Combobox
+                      value={avatar}
+                      onChange={(e) => setAvatar(e.target.value)}
+                      placeholder="Enter or select avatar..."
+                      className="w-full"
+                      options={[
+                        'Concerned Pet Parent',
+                        'Health-Conscious Owner',
+                        'Budget-Minded Parent',
+                        'First-Time Pet Owner',
+                        'Senior Pet Owner'
+                      ]}
+                    />
                         </div>
-                      </CardHeader>
-                      
-                      {expandedSections.elements && (
-                        <CardContent className="space-y-4">
-                          {versionData.elements.map((element, index) => (
-                            <div key={index} className="p-3 border rounded-lg">
-                              <div className="flex items-center justify-between mb-2">
-                                <Badge variant="outline" className="capitalize">
-                                  {element.type}
-                                </Badge>
-                                <span className={`text-sm font-medium ${getPerformanceColor(element.estimated_performance)}`}>
-                                  {element.estimated_performance}%
-                                </span>
-                              </div>
-                              <p className="text-sm font-medium mb-1">{element.content}</p>
-                              <p className="text-xs text-muted-foreground mb-2">{element.rationale}</p>
-                              <div className="p-2 bg-blue-50 dark:bg-blue-950/20 rounded">
-                                <p className="text-xs">
-                                  <span className="font-medium">Trigger:</span> {element.psychological_trigger}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                        </CardContent>
-                      )}
-                    </Card>
 
-                    {/* Blocks */}
-                    <Card className="shadow-card">
-                      <CardHeader 
-                        className="cursor-pointer"
-                        onClick={() => toggleSection('blocks')}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="h-8 w-8 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center">
-                              <Video className="h-5 w-5 text-green-600 dark:text-green-400" />
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">
+                      Awareness Level <span className="text-xs text-muted-foreground">(Market Awareness)</span>
+                    </label>
+                    <Combobox
+                      value={awarenessLevel}
+                      onChange={(e) => setAwarenessLevel(e.target.value)}
+                      placeholder="Enter or select awareness..."
+                      className="w-full"
+                      options={[
+                        'Unaware',
+                        'Problem-Aware',
+                        'Solution-Aware',
+                        'Product-Aware',
+                        'Most-Aware'
+                      ]}
+                    />
                             </div>
-                            <CardTitle className="text-lg">Blocks</CardTitle>
-                          </div>
-                          {expandedSections.blocks ? (
-                            <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                          ) : (
-                            <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                          )}
-                        </div>
-                      </CardHeader>
-                      
-                      {expandedSections.blocks && (
-                        <CardContent className="space-y-4">
-                          {versionData.blocks.map((block, index) => (
-                            <div key={index} className="p-3 border rounded-lg">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                  <Badge className={getSceneTypeColor(block.scene_type)}>
-                                    Scene {block.scene_number}
-                                  </Badge>
-                                  <span className="text-xs text-muted-foreground">{block.timestamp}</span>
-                                </div>
-                                <span className="text-xs text-muted-foreground capitalize">
-                                  {block.scene_type}
-                                </span>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">
+                      Angle <span className="text-xs text-muted-foreground">(Marketing Angle)</span>
+                    </label>
+                    <Combobox
+                      value={angle}
+                      onChange={(e) => setAngle(e.target.value)}
+                      placeholder="Enter or select angle..."
+                      className="w-full"
+                      options={[
+                        'Problem-Aware',
+                        'FOMO',
+                        'UGC Style',
+                        'Social Proof',
+                        'Authority',
+                        'Scarcity',
+                        'Testimonial'
+                      ]}
+                    />
                               </div>
-                              
-                              <h4 className="text-sm font-medium mb-1">{block.description}</h4>
-                              <p className="text-xs text-muted-foreground mb-2">{block.purpose}</p>
                               
                               <div className="space-y-2">
-                                <div>
-                                  <p className="text-xs font-medium text-muted-foreground">Script:</p>
-                                  <p className="text-xs p-2 bg-muted rounded">{block.script}</p>
+                    <label className="text-sm font-medium text-foreground">Format</label>
+                    <Combobox
+                      value={format}
+                      onChange={(e) => setFormat(e.target.value)}
+                      placeholder="Enter or select format..."
+                      className="w-full"
+                      options={[
+                        'UGC Video',
+                        'Testimonial',
+                        'Animation',
+                        'Static Image',
+                        'Carousel',
+                        'Story Ad'
+                      ]}
+                    />
                                 </div>
                                 
-                                <div>
-                                  <p className="text-xs font-medium text-muted-foreground">Visual Elements:</p>
-                                  <div className="flex flex-wrap gap-1 mt-1">
-                                    {block.visual_elements.map((element, idx) => (
-                                      <Badge key={idx} variant="secondary" className="text-xs">
-                                        {element}
-                                      </Badge>
-                                    ))}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Theme</label>
+                    <Combobox
+                      value={theme}
+                      onChange={(e) => setTheme(e.target.value)}
+                      placeholder="Enter or select theme..."
+                      className="w-full"
+                      options={[
+                        'Pet Anxiety',
+                        'Pet Health',
+                        'Budget Solutions',
+                        'Training',
+                        'Wellness',
+                        'Lifestyle'
+                      ]}
+                    />
                                   </div>
                                 </div>
                               </div>
                             </div>
-                          ))}
-                        </CardContent>
-                      )}
                     </Card>
-                  </div>
-                </div>
-              </TabsContent>
-            ))}
-          </Tabs>
-        )}
 
-        {/* Empty State */}
-        {Object.keys(generatedVersions).length === 0 && (
-          <Card className="shadow-card">
-            <CardContent className="p-12 text-center">
-              <Sparkles className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-foreground mb-2">Ready to Generate Creative Ideas?</h3>
-              <p className="text-muted-foreground mb-6">
-                Select a source ad for inspiration and click &ldquo;Generate Ideas&rdquo; to create 5 unique creative variations
-              </p>
-              <div className="text-sm text-muted-foreground">
-                Each version will include:
-                <div className="flex items-center justify-center gap-6 mt-2">
-                  <div className="flex items-center gap-2">
-                    <Lightbulb className="h-4 w-4" />
-                    <span>Idea Source</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Layers className="h-4 w-4" />
-                    <span>Creative Elements</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Video className="h-4 w-4" />
-                    <span>Video Blocks</span>
+          {/* Script Builder - Always Visible */}
+          <div className="space-y-6">
+            
+
+            <ScriptVariations
+              variations={scriptVariations}
+              onUpdateVariation={handleUpdateVariation}
+              onDeleteVariation={handleDeleteVariation}
+              onCloneVariation={handleCloneVariation}
+              onSetPrimary={handleSetPrimary}
+              onPushToProduction={handlePushToProduction}
+              onAddVariation={handleAddVariation}
+              showMetadata={showMetadata}
+              setShowMetadata={setShowMetadata}
+              generateNamingConvention={generateNamingConvention}
+              activeVariation={activeVariation}
+              onActiveVariationChange={setActiveVariation}
+            />
+
+            {/* Push to Production Button at Bottom */}
+            <div className="flex justify-center pt-4">
+              <Button 
+                className="bg-primary hover:bg-primary/90 text-white px-8 py-6 text-lg"
+                onClick={() => handlePushToProduction(activeVariation)}
+              >
+                <Send className="w-5 h-5 mr-2" />
+                Push Brief to Production Workflow
+              </Button>
                   </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
     </AppLayout>
+  );
+}
+
+export default function BriefBuilder() {
+  return (
+    <Suspense fallback={
+      <AppLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading brief builder...</p>
+          </div>
+        </div>
+      </AppLayout>
+    }>
+      <BriefBuilderContent />
+    </Suspense>
   );
 }

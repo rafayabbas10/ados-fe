@@ -16,14 +16,15 @@ import {
   Search,
   Calendar,
   User,
-  Sparkles
+  Sparkles,
+  Kanban
 } from "lucide-react";
 
 const navigationItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Build with AI", url: "/build-ai", icon: Sparkles },
-  { title: "Ad Creatives", url: "/creatives", icon: Play },
-  { title: "Analytics", url: "/analytics", icon: BarChart3 },
+  { title: "All Creatives", url: "/creatives", icon: Play },
+  { title: "Brief Builder", url: "/build-ai", icon: Sparkles },
+  { title: "Workflow", url: "/workflow", icon: Kanban },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 

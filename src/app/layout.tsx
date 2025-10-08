@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AccountProvider } from "@/contexts/AccountContext";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -55,6 +56,7 @@ export default function RootLayout({
         <AccountProvider>
           {children}
         </AccountProvider>
+        <Toaster position="top-right" richColors />
       </body>
     </html>
   );

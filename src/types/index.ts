@@ -256,3 +256,31 @@ export interface VideoBlock {
   text_overlay: string;
   shot_type: string;
 }
+
+// Image-specific types
+export interface ImageBlock {
+  id: number;
+  element: string;
+  position: string;
+  content_type: string;
+  text: string;
+  design_notes: string;
+}
+
+export interface ImageVariation {
+  id: number;
+  element: string;
+  position: string;
+  content_type: string;
+  text: string;
+  visual_desc: string;
+  design_notes: string;
+}
+
+export interface ImageBlocksResponse {
+  data: ImageBlock[];
+}
+
+export interface ImageVariationsResponse {
+  data: ImageVariation[];
+}

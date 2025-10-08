@@ -28,8 +28,8 @@ import {
   ChevronRight,
   Sparkles
 } from "lucide-react";
-import { Ad, VideoScene, AIVariationsResponse, HookVariation, VideoSceneVariation, InstructionVariation } from "@/types";
-import { fetchAdDetails, fetchVideoScenes, fetchAIVariations } from "@/services/adDetailsService";
+import { Ad, VideoScene, AIVariationsResponse, HookVariation, VideoSceneVariation, InstructionVariation, ImageBlocksResponse, ImageVariationsResponse } from "@/types";
+import { fetchAdDetails, fetchVideoScenes, fetchAIVariations, fetchImageBlocks, fetchImageVariations } from "@/services/adDetailsService";
 
 // Component for handling image loading with fallback
 const SceneImage = ({ 
@@ -95,9 +95,26 @@ export default function AdDetails() {
   
   const [ad, setAd] = useState<Ad | null>(null);
   const [videoScenes, setVideoScenes] = useState<VideoScene[]>([]);
+  const [imageBlocks, setImageBlocks] = useState<ImageBlocksResponse[]>([]);
+  const [imageVariations, setImageVariations] = useState<ImageVariationsResponse[]>([]);
   const [variations, setVariations] = useState<AIVariationsResponse | null>(null);
   const [activeVariation, setActiveVariation] = useState<string>("v1");
   const [loading, setLoading] = useState(true);
+  const [selectedHooks, setSelectedHooks] = useState<Set<number>>(new Set());
+
+  // Handler to select/deselect all hooks
+  const handleSelectAllHooks = () => {
+    if (!variations?.v1) return;
+    
+    if (selectedHooks.size === variations.v1.length) {
+      // If all selected, deselect all
+      setSelectedHooks(new Set());
+    } else {
+      // Otherwise, select all
+      const allHookIds = new Set(variations.v1.map(hook => hook.id));
+      setSelectedHooks(allHookIds);
+    }
+  };
 
   // Update active variation when variations are loaded
   useEffect(() => {
@@ -117,10 +134,12 @@ export default function AdDetails() {
         setLoading(true);
         
         // Fetch all data in parallel
-        const [adData, scenes, adVariations] = await Promise.all([
+        const [adData, scenes, adVariations, imgBlocks, imgVariations] = await Promise.all([
           fetchAdDetails(decodedAdId),
           fetchVideoScenes(decodedAdId),
-          fetchAIVariations(decodedAdId)
+          fetchAIVariations(decodedAdId),
+          fetchImageBlocks(decodedAdId),
+          fetchImageVariations(decodedAdId)
         ]);
         
         console.log("📊 Ad Data:", adData);
@@ -128,9 +147,13 @@ export default function AdDetails() {
         console.log("📊 AI Variations:", adVariations);
         console.log("📊 AI Variations Type:", typeof adVariations);
         console.log("📊 AI Variations Array?:", Array.isArray(adVariations));
+        console.log("📊 Image Blocks:", imgBlocks);
+        console.log("📊 Image Variations:", imgVariations);
         
         setAd(adData);
         setVideoScenes(scenes);
+        setImageBlocks(imgBlocks);
+        setImageVariations(imgVariations);
         
         // Handle the new variations structure - it's an array of objects with v1, v2, etc.
         console.log("🔍 DEBUG: adVariations received:", adVariations);
@@ -190,6 +213,79 @@ export default function AdDetails() {
 
   const formatPercentage = (num: number) => {
     return `${num.toFixed(1)}%`;
+  };
+
+  // Handler for hook checkbox toggle
+  const handleHookToggle = (hookId: number) => {
+    setSelectedHooks(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(hookId)) {
+        newSet.delete(hookId);
+      } else {
+        newSet.add(hookId);
+      }
+      return newSet;
+    });
+  };
+
+  // Handler to push v1 (selected hooks) to brief builder
+  const handlePushHooksToBriefBuilder = () => {
+    if (!variations?.v1 || selectedHooks.size === 0) {
+      alert('Please select at least one hook to push to Brief Builder');
+      return;
+    }
+
+    const selectedHookData = variations.v1.filter(hook => selectedHooks.has(hook.id));
+    
+    // Store the data in sessionStorage for Brief Builder to pick up
+    const briefData = {
+      adId: adId,
+      adName: ad?.ad_name || ad?.creative_name,
+      videoScenes: videoScenes,
+      variationType: 'v1',
+      selectedHooks: selectedHookData,
+      adAnalysis: ad?.analysis
+    };
+    
+    sessionStorage.setItem('briefBuilderData', JSON.stringify(briefData));
+    
+    // Navigate to Brief Builder
+    router.push('/build-ai');
+  };
+
+  // Handler to push v2-v5 variations to brief builder
+  const handlePushVariationToBriefBuilder = (variationKey: string) => {
+    const variationData = variations?.[variationKey];
+    if (!variationData) {
+      alert('No variation data available');
+      return;
+    }
+
+    // Store the data in sessionStorage for Brief Builder to pick up
+    const briefData = {
+      adId: adId,
+      adName: ad?.ad_name || ad?.creative_name,
+      videoScenes: videoScenes,
+      variationType: variationKey,
+      variationBlocks: variationData,
+      adAnalysis: ad?.analysis
+    };
+    
+    sessionStorage.setItem('briefBuilderData', JSON.stringify(briefData));
+    
+    // Navigate to Brief Builder
+    router.push('/build-ai');
+  };
+
+  // Helper function to detect if ad is an image ad
+  const isImageAd = (ad: Ad | null) => {
+    if (!ad) return false;
+    const mediaUrl = ad.analysis?.video_content_link || ad.video_url;
+    if (!mediaUrl || typeof mediaUrl !== 'string') return false;
+    
+    const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
+    const lowerUrl = mediaUrl.toLowerCase();
+    return imageExtensions.some(ext => lowerUrl.includes(ext)) || lowerUrl.includes('fbcdn.net');
   };
 
   // Test function to manually call the webhook
@@ -675,7 +771,7 @@ export default function AdDetails() {
         </div>
 
         {/* Accordion Sections */}
-        <Accordion type="multiple" defaultValue={["video-breakdown", "creative-insights"]} className="space-y-4">
+        <Accordion type="multiple" defaultValue={["video-breakdown", "image-breakdown", "creative-insights", "image-ai-variations"]} className="space-y-4">
           {/* Video Scene Breakdown */}
           {videoScenes.length > 0 && (
             <AccordionItem value="video-breakdown" className="shadow-card border rounded-lg">
@@ -765,6 +861,44 @@ export default function AdDetails() {
                       ))}
                     </div>
                   </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          )}
+
+          {/* Image Blocks - Simple Grid */}
+          {isImageAd(ad) && imageBlocks.length > 0 && (
+            <AccordionItem value="image-breakdown" className="shadow-card border rounded-lg">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-primary" />
+                  <span className="text-lg font-semibold">Image Blocks ({imageBlocks[0]?.data?.length || 0})</span>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {imageBlocks[0]?.data?.map((block) => (
+                    <Card key={block.id} className="border border-primary/20 hover:border-primary/40 transition-colors">
+                      <CardHeader className="pb-2">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-sm font-semibold">{block.element}</CardTitle>
+                          <Badge variant="outline" className="text-xs">{block.content_type}</Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        <div className="text-xs text-muted-foreground">Position: {block.position}</div>
+                        {block.text && (
+                          <div className="text-sm">
+                            <span className="font-medium text-muted-foreground">Content:</span>
+                            <div className="mt-1 p-2 bg-muted rounded text-foreground font-medium">&quot;{block.text}&quot;</div>
+                          </div>
+                        )}
+                        <div className="text-xs text-muted-foreground">
+                          <span className="font-medium">Design Notes:</span> {block.design_notes}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
               </AccordionContent>
             </AccordionItem>
@@ -1007,47 +1141,120 @@ export default function AdDetails() {
                           <div>
                             <h3 className="text-lg font-semibold">V1 - Hook Replacement</h3>
                             <p className="text-sm text-muted-foreground">Alternative hook variations to improve initial engagement</p>
-                            <Badge variant="outline" className="mt-2">Hook Optimization</Badge>
+                            <div className="flex items-center gap-2 mt-2">
+                              <Badge variant="outline">Hook Optimization</Badge>
+                              {selectedHooks.size > 0 && (
+                                <Badge className="bg-primary text-primary-foreground">
+                                  {selectedHooks.size} selected
+                                </Badge>
+                              )}
+                            </div>
                           </div>
-                          <Button className="gap-2">
-                            <Sparkles className="h-4 w-4" />
-                            Generate Creative
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="outline"
+                              size="sm"
+                              className="gap-2"
+                              onClick={handleSelectAllHooks}
+                            >
+                              {selectedHooks.size === variations.v1.length ? 'Deselect All' : 'Select All'}
+                            </Button>
+                            <Button 
+                              variant="secondary"
+                              className="gap-2"
+                              onClick={handlePushHooksToBriefBuilder}
+                              disabled={selectedHooks.size === 0}
+                            >
+                              <FileText className="h-4 w-4" />
+                              Push to Brief Builder
+                            </Button>
+                            <Button className="gap-2">
+                              <Sparkles className="h-4 w-4" />
+                              Generate Creative
+                            </Button>
+                          </div>
                         </div>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                          {variations.v1.map((hook) => (
-                            <div key={hook.id} className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
-                              <div className="flex items-center justify-between mb-2">
-                                <Badge variant="secondary" className="text-xs px-2 py-0.5">
-                                  Hook {hook.hook_num}
-                                </Badge>
-                                <Badge variant="outline" className="text-xs px-2 py-0.5">
-                                  Scenes: {hook.replace_scenes}
-                                </Badge>
-                              </div>
-                              
-                              <div className="space-y-2">
-                                <div>
-                                  <h5 className="font-medium text-xs text-muted-foreground uppercase mb-0.5">Script</h5>
-                                  <p className="text-xs text-foreground leading-tight">{hook.script}</p>
-                                </div>
-                                
-                                <div>
-                                  <h5 className="font-medium text-xs text-muted-foreground uppercase mb-0.5">Visual</h5>
-                                  <p className="text-xs text-muted-foreground leading-tight">{hook.visual}</p>
-                                </div>
-                                
-                                <div>
-                                  <h5 className="font-medium text-xs text-muted-foreground uppercase mb-0.5">Text Overlay</h5>
-                                  <div className="p-1.5 bg-muted/50 rounded text-[10px] font-mono leading-tight whitespace-pre-line">
-                                    {hook.text_overlay}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          {variations.v1.map((hook) => {
+                            const isSelected = selectedHooks.has(hook.id);
+                            return (
+                              <div 
+                                key={hook.id} 
+                                onClick={() => handleHookToggle(hook.id)}
+                                className={`
+                                  relative p-4 rounded-lg cursor-pointer transition-all duration-200
+                                  ${isSelected 
+                                    ? 'bg-primary/20 border-2 border-primary shadow-lg shadow-primary/20 scale-[1.02]' 
+                                    : 'bg-primary/5 border-2 border-primary/20 hover:border-primary/40 hover:bg-primary/10'
+                                  }
+                                `}
+                              >
+                                {/* Selection Indicator */}
+                                <div className="absolute top-3 right-3 flex items-center gap-2">
+                                  <div className={`
+                                    w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all
+                                    ${isSelected 
+                                      ? 'bg-primary border-primary' 
+                                      : 'bg-background border-muted-foreground/30'
+                                    }
+                                  `}>
+                                    {isSelected && (
+                                      <svg className="w-4 h-4 text-primary-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    )}
                                   </div>
                                 </div>
+                                
+                                <div className="flex items-center gap-2 mb-3 mr-8">
+                                  <Badge variant="secondary" className="text-xs px-2 py-0.5">
+                                    Hook {hook.hook_num}
+                                  </Badge>
+                                  <Badge variant="outline" className="text-xs px-2 py-0.5">
+                                    Replaces: {hook.replace_scenes}
+                                  </Badge>
+                                </div>
+                                
+                                <div className="space-y-3">
+                                  <div>
+                                    <h5 className="font-semibold text-xs text-muted-foreground uppercase mb-1">Script</h5>
+                                    <p className="text-sm text-foreground leading-relaxed">{hook.script}</p>
+                                  </div>
+                                  
+                                  <div>
+                                    <h5 className="font-semibold text-xs text-muted-foreground uppercase mb-1">Visual</h5>
+                                    <p className="text-xs text-muted-foreground leading-relaxed">{hook.visual}</p>
+                                  </div>
+                                  
+                                  <div>
+                                    <h5 className="font-semibold text-xs text-muted-foreground uppercase mb-1">Text Overlay</h5>
+                                    <div className="p-2 bg-muted/50 rounded text-xs font-mono leading-relaxed whitespace-pre-line">
+                                      {hook.text_overlay}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Click to select hint */}
+                                {!isSelected && (
+                                  <div className="absolute inset-0 rounded-lg opacity-0 hover:opacity-100 transition-opacity bg-gradient-to-t from-primary/10 to-transparent pointer-events-none" />
+                                )}
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
+
+                        {selectedHooks.size > 0 && (
+                          <div className="flex items-center justify-center gap-3 p-4 bg-primary/10 border border-primary/30 rounded-lg">
+                            <Sparkles className="h-5 w-5 text-primary" />
+                            <p className="text-sm font-medium text-foreground">
+                              {selectedHooks.size} hook{selectedHooks.size > 1 ? 's' : ''} selected. 
+                              <span className="text-muted-foreground ml-1">
+                                Click &quot;Push to Brief Builder&quot; to create {selectedHooks.size} variation{selectedHooks.size > 1 ? 's' : ''} with different hooks.
+                              </span>
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </TabsContent>
                   )}
@@ -1080,10 +1287,20 @@ export default function AdDetails() {
                               <p className="text-sm text-muted-foreground">{descriptions[versionKey]}</p>
                               <Badge variant="outline" className="mt-2">Scene Optimization</Badge>
                             </div>
-                            <Button className="gap-2">
-                              <Sparkles className="h-4 w-4" />
-                              Generate Creative
-                            </Button>
+                            <div className="flex gap-2">
+                              <Button 
+                                variant="secondary"
+                                className="gap-2"
+                                onClick={() => handlePushVariationToBriefBuilder(versionKey)}
+                              >
+                                <FileText className="h-4 w-4" />
+                                Push to Brief Builder
+                              </Button>
+                              <Button className="gap-2">
+                                <Sparkles className="h-4 w-4" />
+                                Generate Creative
+                              </Button>
+                            </div>
                           </div>
 
                           {/* Video Timeline */}
@@ -1194,6 +1411,55 @@ export default function AdDetails() {
                     );
                   })}
                 </Tabs>
+              </AccordionContent>
+            </AccordionItem>
+          )}
+
+          {/* Image AI Variations - Simple Grid */}
+          {isImageAd(ad) && imageVariations.length > 0 && (
+            <AccordionItem value="image-ai-variations" className="shadow-card border rounded-lg">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  <span className="text-lg font-semibold">Image AI Variations ({imageVariations.length} versions)</span>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6">
+                <div className="space-y-6">
+                  {imageVariations.map((variation, index) => (
+                    <div key={index} className="space-y-3">
+                      <h4 className="text-sm font-semibold text-muted-foreground">Variation {index + 1}</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {(variation.data || []).map((vItem) => (
+                          <Card key={vItem.id} className="border border-primary/20 hover:border-primary/40 transition-colors">
+                            <CardHeader className="pb-2">
+                              <div className="flex items-center justify-between">
+                                <CardTitle className="text-sm font-semibold">{vItem.element}</CardTitle>
+                                <Badge variant="outline" className="text-xs">{vItem.content_type}</Badge>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="space-y-2">
+                              <div className="text-xs text-muted-foreground">Position: {vItem.position}</div>
+                              {vItem.text && (
+                                <div className="text-sm">
+                                  <span className="font-medium text-muted-foreground">Content:</span>
+                                  <div className="mt-1 p-2 bg-muted rounded text-foreground font-medium">&quot;{vItem.text}&quot;</div>
+                                </div>
+                              )}
+                              {vItem.visual_desc && (
+                                <div className="text-sm">
+                                  <span className="font-medium text-muted-foreground">Visual Direction:</span>
+                                  <div className="mt-1 p-2 bg-secondary/10 border border-secondary/20 rounded text-foreground leading-snug">{vItem.visual_desc}</div>
+                                </div>
+                              )}
+                              <div className="text-xs text-muted-foreground"><span className="font-medium">Design Notes:</span> {vItem.design_notes}</div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </AccordionContent>
             </AccordionItem>
           )}

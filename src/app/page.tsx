@@ -43,6 +43,8 @@ export default function Dashboard() {
   const [modalOpen, setModalOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshingAds, setRefreshingAds] = useState(false);
+  const [mediaLoadingStates, setMediaLoadingStates] = useState<Record<string, boolean>>({});
+  const [mediaErrorStates, setMediaErrorStates] = useState<Record<string, boolean>>({});
   const [formData, setFormData] = useState({
     accountId: '',
     startDate: '',
@@ -170,6 +172,10 @@ export default function Dashboard() {
         setReports(reportsData);
         setTopAds(topAdsData);
         
+        // Reset media loading states when new ads are loaded
+        setMediaLoadingStates({});
+        setMediaErrorStates({});
+        
         console.log("✅ Dashboard data loaded:", { 
           reports: reportsData.length, 
           topAds: topAdsData.length 
@@ -281,6 +287,18 @@ export default function Dashboard() {
     const lowerUrl = url.toLowerCase();
     return videoExtensions.some(ext => lowerUrl.includes(ext)) || lowerUrl.includes('supabase.co');
   };
+
+  // Helper functions for media loading states
+  const setMediaLoading = (adId: string, isLoading: boolean) => {
+    setMediaLoadingStates(prev => ({ ...prev, [adId]: isLoading }));
+  };
+
+  const setMediaError = (adId: string, hasError: boolean) => {
+    setMediaErrorStates(prev => ({ ...prev, [adId]: hasError }));
+  };
+
+  const isMediaLoading = (adId: string) => mediaLoadingStates[adId] || false;
+  const hasMediaError = (adId: string) => mediaErrorStates[adId] || false;
 
   // Set default account when modal opens
   useEffect(() => {
@@ -443,40 +461,99 @@ export default function Dashboard() {
                               isImageUrl(ad.ad_video_link) ? (
                                 // Render as image
                                 <div className="relative w-full h-full">
+                                  {/* Loading spinner overlay */}
+                                  {isMediaLoading(ad.id.toString()) && (
+                                    <div className="absolute inset-0 bg-muted flex items-center justify-center z-10">
+                                      <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent"></div>
+                                    </div>
+                                  )}
+                                  
+                                  {/* Error state */}
+                                  {hasMediaError(ad.id.toString()) && (
+                                    <div className="absolute inset-0 bg-muted flex items-center justify-center z-10">
+                                      <Play className="h-8 w-8 text-muted-foreground" />
+                                    </div>
+                                  )}
+                                  
                                   <img 
                                     src={ad.ad_video_link}
                                     alt={ad.name}
                                     className="w-full h-full object-cover"
-                                    onError={(e) => {
-                                      // Fallback to placeholder on error
-                                      e.currentTarget.style.display = 'none';
-                                      e.currentTarget.parentElement?.classList.add('flex', 'items-center', 'justify-center');
+                                    onLoadStart={() => {
+                                      setMediaLoading(ad.id.toString(), true);
+                                      setMediaError(ad.id.toString(), false);
+                                    }}
+                                    onLoad={() => {
+                                      setMediaLoading(ad.id.toString(), false);
+                                    }}
+                                    onError={() => {
+                                      setMediaLoading(ad.id.toString(), false);
+                                      setMediaError(ad.id.toString(), true);
+                                    }}
+                                    style={{ 
+                                      display: hasMediaError(ad.id.toString()) ? 'none' : 'block'
                                     }}
                                   />
-                                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                    <Play className="h-8 w-8 text-white" />
-                                  </div>
+                                  
+                                  {/* Hover overlay - only show when not loading and no error */}
+                                  {!isMediaLoading(ad.id.toString()) && !hasMediaError(ad.id.toString()) && (
+                                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                      <Play className="h-8 w-8 text-white" />
+                                    </div>
+                                  )}
                                 </div>
                               ) : isVideoUrl(ad.ad_video_link) ? (
                                 // Render as video
-                                <video 
-                                  className="w-full h-full object-cover"
-                                  poster=""
-                                  muted
-                                  onMouseEnter={(e) => {
-                                    const video = e.currentTarget;
-                                    video.play().catch(() => {
-                                      // Ignore play errors (e.g., AbortError)
-                                    });
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    const video = e.currentTarget;
-                                    video.pause();
-                                    video.currentTime = 0;
-                                  }}
-                                >
-                                  <source src={ad.ad_video_link} type="video/mp4" />
-                                </video>
+                                <div className="relative w-full h-full">
+                                  {/* Loading spinner overlay */}
+                                  {isMediaLoading(ad.id.toString()) && (
+                                    <div className="absolute inset-0 bg-muted flex items-center justify-center z-10">
+                                      <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent"></div>
+                                    </div>
+                                  )}
+                                  
+                                  {/* Error state */}
+                                  {hasMediaError(ad.id.toString()) && (
+                                    <div className="absolute inset-0 bg-muted flex items-center justify-center z-10">
+                                      <Play className="h-8 w-8 text-muted-foreground" />
+                                    </div>
+                                  )}
+                                  
+                                  <video 
+                                    className="w-full h-full object-cover"
+                                    poster=""
+                                    muted
+                                    onLoadStart={() => {
+                                      setMediaLoading(ad.id.toString(), true);
+                                      setMediaError(ad.id.toString(), false);
+                                    }}
+                                    onCanPlay={() => {
+                                      setMediaLoading(ad.id.toString(), false);
+                                    }}
+                                    onError={() => {
+                                      setMediaLoading(ad.id.toString(), false);
+                                      setMediaError(ad.id.toString(), true);
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      if (!isMediaLoading(ad.id.toString()) && !hasMediaError(ad.id.toString())) {
+                                        const video = e.currentTarget;
+                                        video.play().catch(() => {
+                                          // Ignore play errors (e.g., AbortError)
+                                        });
+                                      }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      const video = e.currentTarget;
+                                      video.pause();
+                                      video.currentTime = 0;
+                                    }}
+                                    style={{ 
+                                      display: hasMediaError(ad.id.toString()) ? 'none' : 'block'
+                                    }}
+                                  >
+                                    <source src={ad.ad_video_link} type="video/mp4" />
+                                  </video>
+                                </div>
                               ) : (
                                 // Unknown format fallback
                                 <div className="flex items-center justify-center">
