@@ -447,16 +447,16 @@ export default function Dashboard() {
                     </CardContent>
                   </Card>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
                     {topAds.map((ad) => (
                       <Card 
                         key={ad.id} 
-                        className="shadow-card hover:shadow-elevated transition-all duration-200 hover:scale-[1.02] group cursor-pointer overflow-hidden"
+                        className="shadow-card hover:shadow-floating transition-all duration-300 hover:scale-[1.02] group cursor-pointer overflow-hidden border border-border hover:border-primary/50 bg-gradient-to-br from-card to-card/80"
                         onClick={() => window.location.href = `/ads/${encodeURIComponent(ad.id.toString())}/details`}
                       >
-                        <CardHeader className="p-2 pb-1">
+                        <CardHeader className="p-0 pb-0">
                           {/* Creative Thumbnail */}
-                          <div className="relative bg-muted rounded aspect-video flex items-center justify-center mb-1.5 overflow-hidden">
+                          <div className="relative bg-muted/50 aspect-video flex items-center justify-center overflow-hidden">
                             {ad.ad_video_link ? (
                               isImageUrl(ad.ad_video_link) ? (
                                 // Render as image
@@ -563,54 +563,82 @@ export default function Dashboard() {
                             ) : (
                               <Play className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors" />
                             )}
-                            <div className="absolute top-1 right-1">
-                              <Badge className={`text-white text-[10px] py-0 px-1 uppercase ${
-                                ad.ad_type === 'video' ? 'bg-red-500' :
-                                ad.ad_type === 'image' ? 'bg-blue-500' :
-                                ad.ad_type === 'carousel' ? 'bg-purple-500' :
-                                ad.ad_type === 'collection' ? 'bg-orange-500' :
-                                'bg-gray-500'
+                            
+                            {/* Ad Type Badge */}
+                            <div className="absolute top-1.5 right-1.5">
+                              <Badge className={`text-white text-[9px] py-0.5 px-1.5 uppercase font-semibold shadow-lg ${
+                                ad.ad_type === 'video' ? 'bg-red-500/90 backdrop-blur-sm' :
+                                ad.ad_type === 'image' ? 'bg-blue-500/90 backdrop-blur-sm' :
+                                ad.ad_type === 'carousel' ? 'bg-purple-500/90 backdrop-blur-sm' :
+                                ad.ad_type === 'collection' ? 'bg-orange-500/90 backdrop-blur-sm' :
+                                'bg-gray-500/90 backdrop-blur-sm'
                               }`}>
                                 {ad.ad_type || 'UNKNOWN'}
                               </Badge>
                             </div>
+                            
+                            {/* View Details Hint */}
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+                              <div className="bg-primary text-primary-foreground px-3 py-1.5 rounded-md font-medium text-xs shadow-lg transform scale-90 group-hover:scale-100 transition-all">
+                                View Details
+                              </div>
+                            </div>
                           </div>
-                          
-                          <CardTitle className="text-xs font-medium group-hover:text-primary transition-colors line-clamp-1">
-                            {ad.name}
-                          </CardTitle>
                         </CardHeader>
 
-                        <CardContent className="p-2 pt-0">
-                          {/* Key Metrics */}
-                          <div className="grid grid-cols-2 gap-1.5 text-[10px]">
-                            <div>
-                              <p className="text-muted-foreground mb-0.5">Spend</p>
-                              <p className="font-semibold text-foreground">
+                        <CardContent className="p-3 space-y-2.5">
+                          {/* Ad Name */}
+                          <h3 className="font-semibold text-xs text-foreground group-hover:text-primary transition-colors line-clamp-2 leading-tight min-h-[2rem]">
+                            {ad.name}
+                          </h3>
+                          
+                          {/* ROAS - Featured Metric */}
+                          <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 rounded-md p-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-muted-foreground font-medium">ROAS</span>
+                              <div className={`text-xl font-bold ${getRoasColor(ad.roas)}`}>
+                                {ad.roas.toFixed(1)}x
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Key Metrics Grid */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-0.5">
+                              <p className="text-[10px] text-muted-foreground font-medium flex items-center gap-1">
+                                <span className="w-1 h-1 bg-primary rounded-full"></span>
+                                Spend
+                              </p>
+                              <p className="font-bold text-xs text-foreground">
                                 {formatCurrency(ad.spend)}
                               </p>
                             </div>
                             
-                            <div>
-                              <p className="text-muted-foreground mb-0.5">ROAS</p>
-                              <p className={`font-semibold ${getRoasColor(ad.roas)}`}>
-                                {ad.roas.toFixed(1)}x
+                            <div className="space-y-0.5">
+                              <p className="text-[10px] text-muted-foreground font-medium flex items-center gap-1">
+                                <span className="w-1 h-1 bg-accent rounded-full"></span>
+                                Views
                               </p>
-                            </div>
-
-                            <div>
-                              <p className="text-muted-foreground mb-0.5">Views</p>
-                              <p className="font-semibold text-foreground">
+                              <p className="font-bold text-xs text-foreground">
                                 {(ad.total_views / 1000).toFixed(1)}K
                               </p>
                             </div>
-
-                            <div>
-                              <p className="text-muted-foreground mb-0.5">Link</p>
-                              <p className="font-semibold text-primary text-[9px] truncate">
-                                Facebook
-                              </p>
-                            </div>
+                          </div>
+                          
+                          {/* View on Platform Link */}
+                          <div className="pt-1.5 border-t border-border/50">
+                            <a 
+                              href={ad.link} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-[10px] text-primary hover:text-primary-hover font-medium flex items-center gap-1 group/link"
+                            >
+                              <span>View on Facebook</span>
+                              <svg className="w-2.5 h-2.5 group-hover/link:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                            </a>
                           </div>
                         </CardContent>
                       </Card>

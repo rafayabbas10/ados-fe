@@ -3,70 +3,70 @@
 /* adOS Meta Ads Audit - Professional SaaS Design System */
 
 :root {
-  /* Dark Mode - Default Theme */
-  --background: 222 47% 9%;
-  --foreground: 213 31% 91%;
+  /* Dark Mode - Deep Neutral Dark Theme */
+  --background: 0 0% 5%;
+  --foreground: 0 0% 92%;
 
   /* Cards & Surfaces */
-  --card: 222 47% 11%;
-  --card-foreground: 213 31% 91%;
-  --card-hover: 222 47% 13%;
+  --card: 0 0% 8%;
+  --card-foreground: 0 0% 92%;
+  --card-hover: 0 0% 11%;
 
-  --popover: 222 47% 11%;
-  --popover-foreground: 213 31% 91%;
+  --popover: 0 0% 8%;
+  --popover-foreground: 0 0% 92%;
 
   /* Primary Brand - Brighter Blue for Dark Mode */
   --primary: 214 84% 65%;
-  --primary-foreground: 222 47% 11%;
+  --primary-foreground: 0 0% 8%;
   --primary-hover: 214 84% 70%;
   --primary-light: 214 84% 25%;
 
   /* Secondary - Softer Purple */
   --secondary: 262 52% 65%;
-  --secondary-foreground: 222 47% 11%;
+  --secondary-foreground: 0 0% 8%;
   --secondary-hover: 262 52% 70%;
   --secondary-light: 262 52% 25%;
 
   /* Accent - Brighter Green */
   --accent: 158 64% 60%;
-  --accent-foreground: 222 47% 11%;
+  --accent-foreground: 0 0% 8%;
   --accent-hover: 158 64% 65%;
   --accent-light: 158 64% 25%;
 
   /* Status Colors for Dark Mode */
   --success: 158 64% 60%;
-  --success-foreground: 222 47% 11%;
+  --success-foreground: 0 0% 8%;
   --warning: 45 93% 65%;
-  --warning-foreground: 222 47% 11%;
+  --warning-foreground: 0 0% 8%;
   --destructive: 0 72% 60%;
-  --destructive-foreground: 213 31% 91%;
+  --destructive-foreground: 0 0% 92%;
 
   /* Neutral System */
-  --muted: 215 28% 17%;
-  --muted-foreground: 215 20% 65%;
-  --border: 215 28% 17%;
-  --input: 215 28% 17%;
+  --muted: 0 0% 14%;
+  --muted-foreground: 0 0% 65%;
+  --border: 0 0% 16%;
+  --input: 0 0% 14%;
   --ring: 214 84% 65%;
 
   /* Design System Extensions */
   --gradient-primary: linear-gradient(135deg, hsl(214, 84%, 65%), hsl(262, 52%, 65%));
   --gradient-accent: linear-gradient(135deg, hsl(158, 64%, 60%), hsl(214, 84%, 65%));
-  --gradient-subtle: linear-gradient(180deg, hsl(222, 47%, 9%), hsl(222, 47%, 11%));
+  --gradient-subtle: linear-gradient(180deg, hsl(0, 0%, 5%), hsl(0, 0%, 8%));
   
-  --shadow-card: 0 1px 3px 0 hsl(222, 47%, 4%, 0.3), 0 1px 2px -1px hsl(222, 47%, 4%, 0.3);
-  --shadow-elevated: 0 4px 6px -1px hsl(222, 47%, 4%, 0.3), 0 2px 4px -2px hsl(222, 47%, 4%, 0.3);
-  --shadow-floating: 0 10px 15px -3px hsl(222, 47%, 4%, 0.3), 0 4px 6px -4px hsl(222, 47%, 4%, 0.3);
+  --shadow-card: 0 1px 3px 0 hsl(0, 0%, 0%, 0.4), 0 1px 2px -1px hsl(0, 0%, 0%, 0.4);
+  --shadow-elevated: 0 4px 6px -1px hsl(0, 0%, 0%, 0.4), 0 2px 4px -2px hsl(0, 0%, 0%, 0.4);
+  --shadow-floating: 0 10px 15px -3px hsl(0, 0%, 0%, 0.4), 0 4px 6px -4px hsl(0, 0%, 0%, 0.4);
 
   --radius: 0.75rem;
 
   /* Sidebar tokens */
-  --sidebar-background: 222 47% 11%;
-  --sidebar-foreground: 213 31% 91%;
+  --sidebar-background: 0 0% 8%;
+  --sidebar-foreground: 0 0% 92%;
   --sidebar-primary: 214 84% 65%;
-  --sidebar-primary-foreground: 222 47% 11%;
-  --sidebar-accent: 215 28% 17%;
-  --sidebar-accent-foreground: 213 31% 91%;
-  --sidebar-border: 215 28% 17%;
+  --sidebar-primary-foreground: 0 0% 8%;
+  --sidebar-accent: 0 0% 14%;
+  --sidebar-accent-foreground: 0 0% 92%;
+  --sidebar-border: 0 0% 16%;
   --sidebar-ring: 214 84% 65%;
 }
 
