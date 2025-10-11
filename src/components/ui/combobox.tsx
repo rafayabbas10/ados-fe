@@ -10,6 +10,11 @@ const Combobox = React.forwardRef<HTMLInputElement, ComboboxProps>(
     const [showOptions, setShowOptions] = React.useState(false);
     const [filteredOptions, setFilteredOptions] = React.useState(options);
 
+    // Update filtered options when options prop changes
+    React.useEffect(() => {
+      setFilteredOptions(options);
+    }, [options]);
+
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value;
       if (props.onChange) {
@@ -35,6 +40,10 @@ const Combobox = React.forwardRef<HTMLInputElement, ComboboxProps>(
       setShowOptions(false);
     };
 
+    // Separate trending (first 2 items) from existing items
+    const trendingItems = filteredOptions.length > 0 ? filteredOptions.slice(0, 2) : [];
+    const existingItems = filteredOptions.length > 2 ? filteredOptions.slice(2) : [];
+
     return (
       <div className="relative">
         <input
@@ -51,15 +60,47 @@ const Combobox = React.forwardRef<HTMLInputElement, ComboboxProps>(
         
         {showOptions && (
           <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-60 overflow-auto">
-            {filteredOptions.map((option, index) => (
-              <div
-                key={index}
-                className="px-3 py-2 text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground"
-                onClick={() => handleSelectOption(option)}
-              >
-                {option}
-              </div>
-            ))}
+            {/* Trending Section */}
+            {trendingItems.length > 0 && (
+              <>
+                <div className="px-3 py-2 text-xs font-semibold text-muted-foreground bg-muted/50 flex items-center gap-1">
+                  🔥 Trending
+                </div>
+                {trendingItems.map((option, index) => {
+                  // Remove fire emoji from the option text if it exists
+                  const cleanOption = option.replace(/^🔥\s*/, '');
+                  return (
+                    <div
+                      key={`trending-${index}`}
+                      className="px-3 py-2 text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                      onClick={() => handleSelectOption(option)}
+                    >
+                      <span className="text-lg">🔥</span>
+                      <span>{cleanOption}</span>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+            
+            {/* Existing Section */}
+            {existingItems.length > 0 && (
+              <>
+                <div className="px-3 py-2 text-xs font-semibold text-muted-foreground bg-muted/50 mt-1">
+                  Existing
+                </div>
+                {existingItems.map((option, index) => (
+                  <div
+                    key={`existing-${index}`}
+                    className="px-3 py-2 text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground"
+                    onClick={() => handleSelectOption(option)}
+                  >
+                    {option}
+                  </div>
+                ))}
+              </>
+            )}
+            
             {filteredOptions.length === 0 && props.value && (
               <div className="px-3 py-2 text-sm text-muted-foreground">
                 Press Enter to create &quot;{props.value}&quot;

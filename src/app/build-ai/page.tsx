@@ -13,6 +13,7 @@ import { useAccount } from "@/contexts/AccountContext";
 import { ScriptVariations, ScriptVariation } from "@/components/ui/ScriptVariations";
 import { Creative } from "@/services/creativesService";
 import { fetchVideoScenes, fetchAdDetails } from "@/services/adDetailsService";
+import { fetchVariableSelectorOptions, VariableSelectorOptions } from "@/services/variableSelectorService";
 import { VideoScene, HookVariation, VideoSceneVariation } from "@/types";
 
 interface BriefData {
@@ -51,6 +52,7 @@ interface BriefBuilderData {
     angle?: string;
     format?: string;
     theme?: string;
+    tonality?: string;
     video_content_link?: string;
   };
 }
@@ -73,6 +75,18 @@ function BriefBuilderContent() {
   const [angle, setAngle] = useState("");
   const [format, setFormat] = useState("");
   const [theme, setTheme] = useState("");
+  const [tonality, setTonality] = useState("");
+  
+  // Variable selector options from webhook
+  const [variableOptions, setVariableOptions] = useState<VariableSelectorOptions>({
+    avatar: [],
+    market_awareness: [],
+    angle: [],
+    format: [],
+    theme: [],
+    tonality: []
+  });
+  const [optionsLoading, setOptionsLoading] = useState(false);
   
   const [scriptVariations, setScriptVariations] = useState<ScriptVariation[]>([
     {
@@ -120,6 +134,26 @@ function BriefBuilderContent() {
     }
   }, []);
 
+  // Fetch variable selector options when account changes
+  useEffect(() => {
+    const loadVariableOptions = async () => {
+      if (!selectedAccountId) return;
+      
+      setOptionsLoading(true);
+      try {
+        const options = await fetchVariableSelectorOptions(selectedAccountId);
+        setVariableOptions(options);
+      } catch (error) {
+        console.error('Error loading variable selector options:', error);
+        toast.error('Failed to load dropdown options');
+      } finally {
+        setOptionsLoading(false);
+      }
+    };
+
+    loadVariableOptions();
+  }, [selectedAccountId]);
+
   // Handler for v1 - Hook variations
   const populateFromHookVariations = (data: BriefBuilderData) => {
     // Set brief name
@@ -132,6 +166,7 @@ function BriefBuilderContent() {
       setAngle(data.adAnalysis.angle || '');
       setFormat(data.adAnalysis.format || 'UGC Video');
       setTheme(data.adAnalysis.theme || '');
+      setTonality(data.adAnalysis.tonality || '');
     }
 
     // For each selected hook, create a variation with original scenes but hook replaced
@@ -196,6 +231,7 @@ function BriefBuilderContent() {
       setAngle(data.adAnalysis.angle || '');
       setFormat(data.adAnalysis.format || 'UGC Video');
       setTheme(data.adAnalysis.theme || '');
+      setTonality(data.adAnalysis.tonality || '');
     }
 
     // Create blocks directly from variation data
@@ -284,6 +320,7 @@ function BriefBuilderContent() {
       setAngle(adDetails.analysis.angle || '');
       setFormat(adDetails.analysis.format || (creative.ad_type === 'video' ? 'UGC Video' : 'Static Image'));
       setTheme(adDetails.analysis.theme || '');
+      setTonality(adDetails.analysis.tonality || '');
     } else {
       // Fallback if no analysis data
       setFormat(creative.ad_type === 'video' ? 'UGC Video' : 'Static Image');
@@ -469,7 +506,8 @@ function BriefBuilderContent() {
           awarenessLevel: awarenessLevel,
           angle: angle,
           format: format,
-          theme: theme
+          theme: theme,
+          tonality: tonality
         },
         scriptBuilder: {
           variations: scriptVariations.map(variation => ({
@@ -563,7 +601,8 @@ function BriefBuilderContent() {
 
   return (
     <AppLayout>
-      <div className="p-6">
+      <div className="p-6 flex justify-center">
+        <div className="w-full max-w-6xl">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3">
@@ -580,36 +619,42 @@ function BriefBuilderContent() {
         </div>
 
                 <div className="space-y-6">
-          {/* Variable Selector */}
-                  <Card className="shadow-card">
+          {/* Brief Details Section */}
+          <Card className="shadow-card">
             <div className="p-6">
-              <h3 className="text-xl font-semibold text-foreground mb-6">Variable Selector</h3>
+              <h3 className="text-xl font-semibold text-foreground mb-6">Brief Details</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Brief Name</label>
+                  <Input
+                    value={briefName}
+                    onChange={(e) => setBriefName(e.target.value)}
+                    placeholder="Enter brief name..."
+                    className="w-full"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Assign To</label>
+                  <Input
+                    value={assignTo}
+                    onChange={(e) => setAssignTo(e.target.value)}
+                    placeholder="Enter assignee name..."
+                    className="w-full"
+                  />
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Variable Selector */}
+          <Card className="shadow-card">
+            <div className="p-6">
+              <h3 className="text-xl font-semibold text-foreground mb-6">Elements</h3>
               
               <div className="space-y-4">
-                {/* Brief Name & Assign To - Two Columns */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Brief Name</label>
-                    <Input
-                      value={briefName}
-                      onChange={(e) => setBriefName(e.target.value)}
-                      placeholder="Enter brief name..."
-                      className="w-full"
-                    />
-                        </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Assign To</label>
-                    <Input
-                      value={assignTo}
-                      onChange={(e) => setAssignTo(e.target.value)}
-                      placeholder="Enter assignee name..."
-                      className="w-full"
-                    />
-                            </div>
-                          </div>
-
-                {/* Other Variables - Grid */}
+                {/* Variables Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">
@@ -618,17 +663,12 @@ function BriefBuilderContent() {
                     <Combobox
                       value={avatar}
                       onChange={(e) => setAvatar(e.target.value)}
-                      placeholder="Enter or select avatar..."
+                      placeholder={optionsLoading ? "Loading options..." : "Enter or select avatar..."}
                       className="w-full"
-                      options={[
-                        'Concerned Pet Parent',
-                        'Health-Conscious Owner',
-                        'Budget-Minded Parent',
-                        'First-Time Pet Owner',
-                        'Senior Pet Owner'
-                      ]}
+                      options={variableOptions.avatar}
+                      disabled={optionsLoading}
                     />
-                        </div>
+                  </div>
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">
@@ -637,17 +677,12 @@ function BriefBuilderContent() {
                     <Combobox
                       value={awarenessLevel}
                       onChange={(e) => setAwarenessLevel(e.target.value)}
-                      placeholder="Enter or select awareness..."
+                      placeholder={optionsLoading ? "Loading options..." : "Enter or select awareness..."}
                       className="w-full"
-                      options={[
-                        'Unaware',
-                        'Problem-Aware',
-                        'Solution-Aware',
-                        'Product-Aware',
-                        'Most-Aware'
-                      ]}
+                      options={variableOptions.market_awareness}
+                      disabled={optionsLoading}
                     />
-                            </div>
+                  </div>
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">
@@ -656,59 +691,52 @@ function BriefBuilderContent() {
                     <Combobox
                       value={angle}
                       onChange={(e) => setAngle(e.target.value)}
-                      placeholder="Enter or select angle..."
+                      placeholder={optionsLoading ? "Loading options..." : "Enter or select angle..."}
                       className="w-full"
-                      options={[
-                        'Problem-Aware',
-                        'FOMO',
-                        'UGC Style',
-                        'Social Proof',
-                        'Authority',
-                        'Scarcity',
-                        'Testimonial'
-                      ]}
+                      options={variableOptions.angle}
+                      disabled={optionsLoading}
                     />
-                              </div>
+                  </div>
                               
-                              <div className="space-y-2">
+                  <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">Format</label>
                     <Combobox
                       value={format}
                       onChange={(e) => setFormat(e.target.value)}
-                      placeholder="Enter or select format..."
+                      placeholder={optionsLoading ? "Loading options..." : "Enter or select format..."}
                       className="w-full"
-                      options={[
-                        'UGC Video',
-                        'Testimonial',
-                        'Animation',
-                        'Static Image',
-                        'Carousel',
-                        'Story Ad'
-                      ]}
+                      options={variableOptions.format}
+                      disabled={optionsLoading}
                     />
-                                </div>
+                  </div>
                                 
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">Theme</label>
                     <Combobox
                       value={theme}
                       onChange={(e) => setTheme(e.target.value)}
-                      placeholder="Enter or select theme..."
+                      placeholder={optionsLoading ? "Loading options..." : "Enter or select theme..."}
                       className="w-full"
-                      options={[
-                        'Pet Anxiety',
-                        'Pet Health',
-                        'Budget Solutions',
-                        'Training',
-                        'Wellness',
-                        'Lifestyle'
-                      ]}
+                      options={variableOptions.theme}
+                      disabled={optionsLoading}
                     />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                    </Card>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Tonality</label>
+                    <Combobox
+                      value={tonality}
+                      onChange={(e) => setTonality(e.target.value)}
+                      placeholder={optionsLoading ? "Loading options..." : "Enter or select tonality..."}
+                      className="w-full"
+                      options={variableOptions.tonality}
+                      disabled={optionsLoading}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
 
           {/* Script Builder - Always Visible */}
           <div className="space-y-6">
@@ -741,6 +769,7 @@ function BriefBuilderContent() {
                   </div>
                 </div>
               </div>
+        </div>
       </div>
     </AppLayout>
   );
