@@ -9,6 +9,7 @@ interface AccountContextType {
   setSelectedAccountId: (accountId: string) => void;
   accounts: AdAccount[];
   loading: boolean;
+  refreshAccounts: () => Promise<void>;
 }
 
 const AccountContext = createContext<AccountContextType | undefined>(undefined);
@@ -53,12 +54,37 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     console.log("💾 Saved selected account to localStorage:", accountId);
   };
 
+  const refreshAccounts = async () => {
+    setLoading(true);
+    try {
+      console.log("🔄 Refreshing accounts...");
+      const accountsData = await fetchAdAccounts();
+      console.log("✅ Accounts refreshed:", accountsData);
+      setAccounts(accountsData);
+      
+      // Check if selected account still exists
+      if (selectedAccountId && !accountsData.find(acc => acc.id === selectedAccountId)) {
+        // If current account no longer exists, select first account
+        if (accountsData.length > 0) {
+          handleSetSelectedAccountId(accountsData[0].id);
+        } else {
+          setSelectedAccountId("");
+        }
+      }
+    } catch (error) {
+      console.error("❌ Failed to refresh accounts:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <AccountContext.Provider value={{
       selectedAccountId,
       setSelectedAccountId: handleSetSelectedAccountId,
       accounts,
-      loading
+      loading,
+      refreshAccounts
     }}>
       {children}
     </AccountContext.Provider>
