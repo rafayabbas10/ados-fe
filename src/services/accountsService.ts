@@ -5,17 +5,29 @@ const AVAILABLE_ACCOUNTS_WEBHOOK = "https://n8n.srv931040.hstgr.cloud/webhook/ge
 const ADD_ACCOUNTS_WEBHOOK = "https://n8n.srv931040.hstgr.cloud/webhook/add-ad-accounts";
 const UPDATE_ACCOUNT_NAME_WEBHOOK = "https://n8n.srv931040.hstgr.cloud/webhook/update-ad-account-name";
 
-export const fetchAdAccounts = async (): Promise<AdAccount[]> => {
+export const fetchAdAccounts = async (userId?: string): Promise<AdAccount[]> => {
   try {
     console.log("🔄 Fetching ad accounts from webhook:", WEBHOOK_URL);
+    console.log("👤 User ID:", userId);
     
-    const response = await fetch(WEBHOOK_URL, {
+    // Build URL with query parameter for user_id if provided
+    const url = userId ? `${WEBHOOK_URL}?user_id=${encodeURIComponent(userId)}` : WEBHOOK_URL;
+    console.log("📡 Request URL:", url);
+    
+    // Add timeout to prevent hanging
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+    
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
       },
-      mode: 'cors', // Try CORS first
+      mode: 'cors',
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
     
     console.log("📊 Response status:", response.status);
     console.log("📊 Response headers:", Object.fromEntries(response.headers.entries()));
@@ -89,7 +101,9 @@ export const fetchAdAccounts = async (): Promise<AdAccount[]> => {
     try {
       console.log("🔄 Retrying with no-cors mode...");
       
-      await fetch(WEBHOOK_URL, {
+      const fallbackUrl = userId ? `${WEBHOOK_URL}?user_id=${encodeURIComponent(userId)}` : WEBHOOK_URL;
+      
+      await fetch(fallbackUrl, {
         method: 'GET',
         mode: 'no-cors',
       });
@@ -99,6 +113,12 @@ export const fetchAdAccounts = async (): Promise<AdAccount[]> => {
       
     } catch (noCorsError) {
       console.error("❌ No-CORS fallback also failed:", noCorsError);
+    }
+    
+    // Check if it was a timeout
+    if (error && (error as Error).name === 'AbortError') {
+      console.error('⏱️ Request timed out after 8 seconds');
+      throw new Error('Request timeout - webhook not responding');
     }
     
     throw error;

@@ -1,20 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { AppLayout } from "@/components/AppLayout";
-import { useAccount } from "@/contexts/AccountContext";
-import { useAuth } from "@/contexts/AuthContext";
+import { useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Kanban, Plus, RefreshCw, Eye, Upload, X, Film, User as UserIcon, Target, Layout, Lightbulb, Calendar, Image as ImageIcon, GripVertical, Share2, Copy, Check } from "lucide-react";
-import { fetchProductionAds, ProductionAd, updateAdStatus } from "@/services/workflowService";
+import { Kanban, Eye, Film, User as UserIcon, Target, Layout, Lightbulb, Calendar, Image as ImageIcon, Lock, RefreshCw, AlertCircle } from "lucide-react";
+import { fetchProductionAds, ProductionAd } from "@/services/workflowService";
 import { fetchAdBlocks, AdBlockVersion } from "@/services/adBlocksService";
-import { createClientAccess, getClientAccessByAccount, getShareableLink, regenerateClientPassword } from "@/services/clientAccessService";
+import { verifyClientAccess, getClientAccessByAccount } from "@/services/clientAccessService";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -38,23 +36,20 @@ const STATUSES = [
   { name: 'Iterating', color: 'bg-green-500', count: 1 },
 ] as const;
 
-export default function Workflow() {
-  const { selectedAccountId, accounts } = useAccount();
-  const { user } = useAuth();
+export default function ClientWorkflow() {
+  const searchParams = useSearchParams();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [password, setPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [accountId, setAccountId] = useState<string | null>(null);
+  const [accountName, setAccountName] = useState<string>("");
   const [productionAds, setProductionAds] = useState<ProductionAd[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [selectedAd, setSelectedAd] = useState<ProductionAd | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [adBlockVersions, setAdBlockVersions] = useState<AdBlockVersion[]>([]);
   const [loadingBlocks, setLoadingBlocks] = useState(false);
   const [activeId, setActiveId] = useState<number | null>(null);
-  
-  // Client sharing states
-  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
-  const [shareUrl, setShareUrl] = useState('');
-  const [sharePassword, setSharePassword] = useState('');
-  const [linkCopied, setLinkCopied] = useState(false);
-  const [passwordCopied, setPasswordCopied] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -64,21 +59,104 @@ export default function Workflow() {
     })
   );
 
+  // Get account ID from URL and check for existing session
   useEffect(() => {
-    if (selectedAccountId) {
+    const urlAccountId = searchParams.get('account');
+    
+    if (urlAccountId) {
+      // New URL with account parameter
+      setAccountId(urlAccountId);
+      
+      // Check if already authenticated for this account
+      const sessionKey = `clientAuth_${urlAccountId}`;
+      const isAuthed = localStorage.getItem(sessionKey) === 'true';
+      
+      if (isAuthed) {
+        setIsAuthenticated(true);
+        
+        // Get account name
+        const access = getClientAccessByAccount(urlAccountId);
+        if (access) {
+          setAccountName(access.accountName);
+        }
+      } else {
+        // Get account name for display
+        const access = getClientAccessByAccount(urlAccountId);
+        if (access) {
+          setAccountName(access.accountName);
+        } else {
+          setPasswordError("Invalid or expired link");
+        }
+      }
+    } else {
+      // Fallback to old method (for backward compatibility)
+      const clientAuth = localStorage.getItem('clientAuth');
+      const clientAccountId = localStorage.getItem('clientAccountId');
+      
+      if (clientAuth === 'true' && clientAccountId) {
+        setIsAuthenticated(true);
+        setAccountId(clientAccountId);
+      }
+    }
+  }, [searchParams]);
+
+  // Load ads when authenticated
+  useEffect(() => {
+    if (isAuthenticated && accountId) {
       loadProductionAds();
     }
-  }, [selectedAccountId]);
+  }, [isAuthenticated, accountId]);
+
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!accountId) {
+      setPasswordError("No account specified");
+      return;
+    }
+    
+    // Verify password for this specific account
+    const isValid = verifyClientAccess(accountId, password);
+    
+    if (isValid) {
+      setIsAuthenticated(true);
+      setPasswordError("");
+      
+      // Store session for this specific account
+      const sessionKey = `clientAuth_${accountId}`;
+      localStorage.setItem(sessionKey, 'true');
+      
+      toast.success("Access granted!");
+    } else {
+      setPasswordError("Invalid password");
+      setPassword("");
+    }
+  };
+
+  const handleLogout = () => {
+    if (accountId) {
+      // Clear session for this specific account
+      const sessionKey = `clientAuth_${accountId}`;
+      localStorage.removeItem(sessionKey);
+    }
+    
+    setIsAuthenticated(false);
+    setPassword("");
+    
+    // Keep accountId to show password screen again
+    // setAccountId(null);
+  };
 
   const loadProductionAds = async () => {
-    if (!selectedAccountId) return;
+    if (!accountId) return;
 
     setLoading(true);
     try {
-      const data = await fetchProductionAds(selectedAccountId);
+      const data = await fetchProductionAds(accountId);
       setProductionAds(data);
     } catch (error) {
       console.error('Failed to load production ads:', error);
+      toast.error('Failed to load workflow data');
     } finally {
       setLoading(false);
     }
@@ -113,161 +191,130 @@ export default function Workflow() {
     }
   };
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setSelectedAd(null);
-    setAdBlockVersions([]);
-  };
-
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as number);
   };
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
+  const handleDragEnd = (event: DragEndEvent) => {
     setActiveId(null);
-
-    if (!over) return;
-
-    const adId = active.id as number;
-    const newStatus = over.id as string;
-    
-    const ad = productionAds.find(a => a.id === adId);
-    if (!ad || ad.status === newStatus) return;
-
-    // Optimistically update UI
-    setProductionAds(prev => 
-      prev.map(a => a.id === adId ? { ...a, status: newStatus as ProductionAd['status'] } : a)
-    );
-
-    // Update backend
-    try {
-      await updateAdStatus(adId, newStatus);
-      toast.success('Status updated', {
-        description: `Moved to ${newStatus}`,
-      });
-    } catch (error) {
-      console.error('Failed to update ad status:', error);
-      // Revert on error
-      setProductionAds(prev => 
-        prev.map(a => a.id === adId ? { ...a, status: ad.status } : a)
-      );
-      toast.error('Failed to update status', {
-        description: 'Please try again.',
-      });
-    }
+    // Client view is read-only, so no drag action
   };
 
   const activeAd = activeId ? productionAds.find(ad => ad.id === activeId) : null;
 
-  const handleShareWithClient = () => {
-    if (!selectedAccountId || !user) return;
-    
-    const account = accounts.find(acc => acc.id === selectedAccountId);
-    if (!account) return;
-
-    // Check if access already exists
-    let access = getClientAccessByAccount(selectedAccountId);
-    
-    if (!access) {
-      // Create new client access
-      access = createClientAccess(
-        selectedAccountId,
-        account.account_name,
-        user.id,
-        user.name
-      );
-      toast.success('Client access created!');
-    } else {
-      toast.info('Using existing client access');
-    }
-
-    const url = getShareableLink(selectedAccountId);
-    setShareUrl(url);
-    setSharePassword(access.password);
-    setIsShareDialogOpen(true);
-    setLinkCopied(false);
-    setPasswordCopied(false);
-  };
-
-  const handleRegeneratePassword = () => {
-    if (!selectedAccountId) return;
-    
-    const newAccess = regenerateClientPassword(selectedAccountId);
-    if (newAccess) {
-      setSharePassword(newAccess.password);
-      setPasswordCopied(false);
-      toast.success('New password generated!');
-    }
-  };
-
-  const copyToClipboard = (text: string, type: 'link' | 'password') => {
-    navigator.clipboard.writeText(text).then(() => {
-      if (type === 'link') {
-        setLinkCopied(true);
-        setTimeout(() => setLinkCopied(false), 2000);
-      } else {
-        setPasswordCopied(true);
-        setTimeout(() => setPasswordCopied(false), 2000);
-      }
-      toast.success(`${type === 'link' ? 'Link' : 'Password'} copied to clipboard!`);
-    });
-  };
-
-  if (!selectedAccountId) {
+  // Password screen
+  if (!isAuthenticated) {
     return (
-      <AppLayout>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center">
-            <Kanban className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-foreground mb-2">Select an Account</h3>
-            <p className="text-muted-foreground">
-              Please select an ad account from the sidebar to view workflow
-            </p>
-          </div>
-        </div>
-      </AppLayout>
-    );
-  }
-
-  return (
-    <AppLayout>
-      <div className="py-3 min-h-screen">
-        <div className="max-w-[1600px] mx-auto px-6">
-          {/* Header */}
-          <div className="mb-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Kanban className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold text-foreground">
-                    Production Workflow
-                  </h1>
-                  <p className="text-xs text-muted-foreground">
-                    Creative pipeline from brief to final asset
-                  </p>
-                </div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/5 p-4">
+        <Card className="w-full max-w-md p-8 shadow-2xl">
+          {/* Logo */}
+          <div className="flex items-center justify-center mb-8">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 bg-gradient-primary rounded-xl flex items-center justify-center">
+                <Kanban className="h-7 w-7 text-white" />
               </div>
-              <div className="flex gap-2">
-                <Button onClick={loadProductionAds} variant="outline" size="sm">
-                  <RefreshCw className="w-4 h-4" />
-                </Button>
-                <Button 
-                  onClick={handleShareWithClient}
-                  variant="outline" 
-                  size="sm"
-                  className="bg-primary hover:bg-primary/90 text-white"
-                >
-                  <Share2 className="w-4 h-4" />
-                  <span className="ml-2"> Share with Client</span>
-                </Button>
+              <div>
+                <h1 className="font-bold text-2xl text-foreground">adOS Workflow</h1>
+                <p className="text-sm text-muted-foreground">Client Access</p>
               </div>
             </div>
           </div>
 
-          {/* Kanban Board */}
+          {/* Title */}
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
+              <Lock className="h-8 w-8 text-primary" />
+            </div>
+            <h2 className="text-2xl font-bold text-foreground mb-2">Protected Workflow</h2>
+            <p className="text-muted-foreground">Enter the password provided by your strategist</p>
+            
+            {accountName && (
+              <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-muted rounded-lg">
+                <Kanban className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-foreground">{accountName}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Password Form */}
+          <form onSubmit={handlePasswordSubmit} className="space-y-6">
+            {passwordError && (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 px-4 py-3 rounded-lg flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                <p className="text-sm">{passwordError}</p>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="password" className="flex items-center gap-2">
+                <Lock className="h-4 w-4" />
+                Password
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="Enter password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setPasswordError("");
+                }}
+                required
+                className="h-11"
+              />
+            </div>
+
+            <Button type="submit" className="w-full h-11 text-base" disabled={!accountId}>
+              Access Workflow
+            </Button>
+          </form>
+
+          {/* Help text */}
+          <div className="mt-6 pt-6 border-t">
+            <p className="text-xs text-muted-foreground text-center">
+              Don&apos;t have a password? Contact your strategist for access.
+            </p>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // Workflow view
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Simple header without full AppLayout */}
+      <header className="bg-card border-b shadow-sm sticky top-0 z-50">
+        <div className="max-w-[1600px] mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 bg-gradient-primary rounded-lg flex items-center justify-center">
+                <Kanban className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold text-foreground">Production Workflow</h1>
+                <p className="text-xs text-muted-foreground">
+                  {accountName ? `${accountName} - ` : ''}Client View - Read Only
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button onClick={loadProductionAds} variant="outline" size="sm">
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Refresh
+              </Button>
+              <Button onClick={handleLogout} variant="outline" size="sm">
+                <Lock className="w-4 h-4 mr-2" />
+                Logout
+              </Button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Workflow content */}
+      <div className="py-6">
+        <div className="max-w-[1600px] mx-auto px-6">
           {loading ? (
             <div className="text-center py-12">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-primary border-t-transparent"></div>
@@ -336,7 +383,7 @@ export default function Workflow() {
                   ? ((getAdsByStatus('Launched').length / productionAds.length) * 100).toFixed(0)
                   : 0}%
               </div>
-              <div className="text-xs text-muted-foreground mt-1 whitespace-nowrap">Avg. Production</div>
+              <div className="text-xs text-muted-foreground mt-1 whitespace-nowrap">Completion Rate</div>
             </Card>
           </div>
         </div>
@@ -540,133 +587,7 @@ export default function Workflow() {
           )}
         </DialogContent>
       </Dialog>
-
-      {/* Share with Client Dialog */}
-      <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Share2 className="w-5 h-5 text-primary" />
-              Share Workflow with Client
-            </DialogTitle>
-            <DialogDescription>
-              Share this password-protected link with your client to give them read-only access to the workflow
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-6 py-4">
-            {/* Account Info */}
-            <div className="bg-muted/50 p-4 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <Kanban className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm font-medium text-muted-foreground">Sharing Access For:</span>
-              </div>
-              <p className="font-semibold text-foreground">
-                {accounts.find(acc => acc.id === selectedAccountId)?.account_name || 'Unknown Account'}
-              </p>
-            </div>
-
-            {/* Shareable Link */}
-            <div className="space-y-2">
-              <Label htmlFor="share-url">Shareable Link</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="share-url"
-                  value={shareUrl}
-                  readOnly
-                  className="font-mono text-sm"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => copyToClipboard(shareUrl, 'link')}
-                  className="flex-shrink-0"
-                >
-                  {linkCopied ? (
-                    <Check className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Send this link to your client
-              </p>
-            </div>
-
-            {/* Password */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="share-password">Access Password</Label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleRegeneratePassword}
-                  className="h-auto py-1 px-2 text-xs"
-                >
-                  <RefreshCw className="h-3 w-3 mr-1" />
-                  Regenerate
-                </Button>
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  id="share-password"
-                  value={sharePassword}
-                  readOnly
-                  className="font-mono text-lg font-bold tracking-wider"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => copyToClipboard(sharePassword, 'password')}
-                  className="flex-shrink-0"
-                >
-                  {passwordCopied ? (
-                    <Check className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Share this password separately with your client for secure access
-              </p>
-            </div>
-
-            {/* Instructions */}
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
-              <h4 className="font-semibold text-sm text-foreground mb-2">Instructions for Client:</h4>
-              <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-                <li>Click on the shareable link</li>
-                <li>Enter the access password provided</li>
-                <li>View the workflow in read-only mode</li>
-              </ol>
-            </div>
-
-            {/* Security Note */}
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 rounded-lg">
-              <p className="text-xs text-amber-800 dark:text-amber-200">
-                <strong>Security Note:</strong> This password provides read-only access to the workflow for this ad account only. 
-                You can regenerate the password at any time to revoke access.
-              </p>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsShareDialogOpen(false)}
-            >
-              Done
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </AppLayout>
+    </div>
   );
 }
 
@@ -688,18 +609,13 @@ function DroppableColumn({
 
   return (
     <div className="w-full">
-      {/* Column Header */}
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h3 className="font-semibold text-sm text-foreground truncate">{statusConfig.name}</h3>
           <span className="text-xs text-muted-foreground flex-shrink-0">({ads.length})</span>
         </div>
-        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 flex-shrink-0">
-          <Plus className="w-3 h-3" />
-        </Button>
       </div>
 
-      {/* Droppable Area */}
       <div 
         ref={setNodeRef}
         className="space-y-2 min-h-[200px]"
@@ -738,6 +654,7 @@ function DraggableAdCard({
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: ad.id,
+    disabled: true, // Disable dragging for client view
   });
 
   const style = transform ? {
@@ -773,9 +690,8 @@ function AdCard({
 }) {
   return (
     <Card 
-      className={`p-3 bg-card border hover:border-primary/50 transition-colors cursor-grab active:cursor-grabbing ${isDragging ? 'opacity-50' : ''}`}
+      className={`p-3 bg-card border hover:border-primary/50 transition-colors ${isDragging ? 'opacity-50' : ''}`}
     >
-      {/* Card Header with Status Dot */}
       <div className="flex items-start gap-2 mb-2">
         <div className="mt-0.5">
           <div className={`w-2 h-2 rounded-full ${statusConfig.color}`}></div>
@@ -790,7 +706,6 @@ function AdCard({
         </div>
       </div>
 
-      {/* Badges */}
       <div className="flex flex-wrap gap-1 mb-2">
         <Badge variant="outline" className="text-xs px-1.5 py-0 h-4 text-[10px]">
           {ad.market_awareness.split(' ')[0]}
@@ -802,7 +717,6 @@ function AdCard({
         )}
       </div>
 
-      {/* Action Buttons */}
       <div className="flex items-center gap-1 pt-2 border-t">
         <Button 
           variant="ghost" 
@@ -817,16 +731,8 @@ function AdCard({
           <Eye className="w-3 h-3 mr-1" />
           View
         </Button>
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          className="h-7 flex-1 text-xs px-2 cursor-pointer"
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          <Upload className="w-3 h-3 mr-1" />
-          Upload
-        </Button>
       </div>
     </Card>
   );
 }
+

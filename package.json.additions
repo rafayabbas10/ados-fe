@@ -1,0 +1,12 @@
+{
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.3",
+    "@supabase/ssr": "^0.1.0"
+  },
+  "scripts": {
+    "supabase:types": "supabase gen types typescript --project-id YOUR_PROJECT_REF > src/types/supabase.ts",
+    "test:auth": "echo 'Run auth tests here'",
+    "db:verify": "echo 'Verify database setup'"
+  }
+}
+

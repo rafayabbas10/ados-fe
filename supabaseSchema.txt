@@ -1,0 +1,255 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.Ad Accounts (
+  id text NOT NULL,
+  name text,
+  business_name text,
+  status text,
+  amount_spent text,
+  balance text,
+  currency text,
+  timezone text,
+  CONSTRAINT Ad Accounts_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.Audit Report (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  account_id text,
+  from_date date,
+  to_date date,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  status text,
+  CONSTRAINT Audit Report_pkey PRIMARY KEY (id),
+  CONSTRAINT Audit Report_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.Ad Accounts(id)
+);
+CREATE TABLE public.Audit Summary (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  audit_id bigint,
+  psychological_triggers text,
+  paint_points text,
+  tonality text,
+  visuals text,
+  market_awareness text,
+  angle text,
+  format text,
+  theme text,
+  recomendations text,
+  CONSTRAINT Audit Summary_pkey PRIMARY KEY (id),
+  CONSTRAINT Audit Summary_audit_id_fkey FOREIGN KEY (audit_id) REFERENCES public.Audit Report(id)
+);
+CREATE TABLE public.Audit-Ads (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  audit_id bigint,
+  name text,
+  link text,
+  spend bigint,
+  roas double precision,
+  aov real,
+  thumbstop double precision,
+  hold_rate double precision,
+  ctr double precision,
+  click_to_purchase double precision,
+  cpa real,
+  translation text,
+  hook text,
+  psychological_triggers text,
+  pain_points text,
+  tonality text,
+  visuals text,
+  market_awareness text,
+  avatar text,
+  angle text,
+  format text,
+  theme text,
+  recomendations text,
+  ad_video_link text,
+  total_views bigint,
+  retention_25 bigint,
+  retention_50 bigint,
+  retention_75 bigint,
+  retention_95 bigint,
+  retention_100 bigint,
+  ad_type text,
+  CONSTRAINT Audit-Ads_pkey PRIMARY KEY (id),
+  CONSTRAINT Audit-Ads_audit_id_fkey FOREIGN KEY (audit_id) REFERENCES public.Audit Report(id)
+);
+CREATE TABLE public.Image Blocks (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  audit_ad_id bigint,
+  element text,
+  position text,
+  content_type text,
+  text text,
+  visual text,
+  design_notes text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT Image Blocks_pkey PRIMARY KEY (id),
+  CONSTRAINT Image Blocks_audit_ad_id_fkey FOREIGN KEY (audit_ad_id) REFERENCES public.Audit-Ads(id)
+);
+CREATE TABLE public.Img Variation 1 (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  audit_ad_id bigint,
+  element text,
+  position text,
+  content_type text,
+  text text,
+  visual_desc text,
+  design_notes text,
+  CONSTRAINT Img Variation 1_pkey PRIMARY KEY (id),
+  CONSTRAINT Img Variation 1_audit_ad_id_fkey FOREIGN KEY (audit_ad_id) REFERENCES public.Audit-Ads(id)
+);
+CREATE TABLE public.Production Workflow (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  account_id text,
+  name text,
+  market_awareness text,
+  angle text,
+  format text,
+  theme text,
+  status text,
+  assigned_to text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  avatar text,
+  CONSTRAINT Production Workflow_pkey PRIMARY KEY (id),
+  CONSTRAINT Production Workflow_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.Ad Accounts(id)
+);
+CREATE TABLE public.Products (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  account_id text,
+  title text,
+  currency text,
+  price text,
+  colors text,
+  description text,
+  category text,
+  niche text,
+  micro text,
+  link text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT Products_pkey PRIMARY KEY (id),
+  CONSTRAINT Products_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.Ad Accounts(id)
+);
+CREATE TABLE public.Variation 1 (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  adit_ad_id bigint,
+  hook_num smallint,
+  script text,
+  visual text,
+  text_overlay text,
+  replace_scenes text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT Variation 1_pkey PRIMARY KEY (id),
+  CONSTRAINT Variation 1_adit_ad_id_fkey FOREIGN KEY (adit_ad_id) REFERENCES public.Audit-Ads(id)
+);
+CREATE TABLE public.Variation 2 (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  audit_ad_id bigint,
+  scene smallint,
+  timestamp text,
+  script text,
+  visual text,
+  text_overlay text,
+  shot_type text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT Variation 2_pkey PRIMARY KEY (id),
+  CONSTRAINT Variation 2_audit_ad_id_fkey FOREIGN KEY (audit_ad_id) REFERENCES public.Audit-Ads(id)
+);
+CREATE TABLE public.Variation 3 (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  audit_ad_id bigint,
+  scene smallint,
+  timestamp text,
+  script text,
+  visual text,
+  text_overlay text,
+  shot_type text,
+  value_block_type text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT Variation 3_pkey PRIMARY KEY (id),
+  CONSTRAINT Variation 3_audit_ad_id_fkey FOREIGN KEY (audit_ad_id) REFERENCES public.Audit-Ads(id)
+);
+CREATE TABLE public.Variation 4 (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  audit_ad_id bigint,
+  scene smallint,
+  timestamp text,
+  script text,
+  visual text,
+  text_overlay text,
+  shot_type text,
+  value_block_type text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT Variation 4_pkey PRIMARY KEY (id),
+  CONSTRAINT Variation 4_audit_ad_id_fkey FOREIGN KEY (audit_ad_id) REFERENCES public.Audit-Ads(id)
+);
+CREATE TABLE public.Variation 5 (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  audit_ad_id bigint,
+  scene smallint,
+  timestamp text,
+  script text,
+  visual text,
+  text_overlay text,
+  shot_type text,
+  value_block_type text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT Variation 5_pkey PRIMARY KEY (id),
+  CONSTRAINT Variation 5_audit_ad_id_fkey FOREIGN KEY (audit_ad_id) REFERENCES public.Audit-Ads(id)
+);
+CREATE TABLE public.Video Blocks (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  audit_ad_id bigint,
+  scene smallint,
+  timestamp text,
+  script text,
+  visual text,
+  text_overlay text,
+  shot_type text,
+  value_block_type text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  screenshot_url text,
+  CONSTRAINT Video Blocks_pkey PRIMARY KEY (id),
+  CONSTRAINT Video Blocks_audit_ad_id_fkey FOREIGN KEY (audit_ad_id) REFERENCES public.Audit-Ads(id)
+);
+CREATE TABLE public.Workflow Video Blocks (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  workflow_id bigint,
+  scene text,
+  script text,
+  audio text,
+  visual text,
+  text_overlay text,
+  screenshot_url text,
+  version text,
+  CONSTRAINT Workflow Video Blocks_pkey PRIMARY KEY (id),
+  CONSTRAINT Workflow Video Blocks_workflow_id_fkey FOREIGN KEY (workflow_id) REFERENCES public.Production Workflow(id)
+);
+CREATE TABLE public.user_accounts (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  user_id uuid NOT NULL,
+  account_id text NOT NULL,
+  assigned_at timestamp with time zone NOT NULL DEFAULT now(),
+  assigned_by uuid,
+  CONSTRAINT user_accounts_pkey PRIMARY KEY (id),
+  CONSTRAINT user_accounts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
+  CONSTRAINT user_accounts_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.Ad Accounts(id),
+  CONSTRAINT user_accounts_assigned_by_fkey FOREIGN KEY (assigned_by) REFERENCES public.users(id)
+);
+CREATE TABLE public.users (
+  id uuid NOT NULL,
+  email text NOT NULL UNIQUE,
+  name text NOT NULL,
+  role text NOT NULL CHECK (role = ANY (ARRAY['Admin'::text, 'Strategist'::text, 'Client'::text])),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid,
+  updated_at timestamp with time zone DEFAULT now(),
+  last_login timestamp with time zone,
+  is_active boolean DEFAULT true,
+  CONSTRAINT users_pkey PRIMARY KEY (id),
+  CONSTRAINT users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id),
+  CONSTRAINT users_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id)
+);

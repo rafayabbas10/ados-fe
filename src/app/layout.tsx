@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { AccountProvider } from "@/contexts/AccountContext";
 import { Toaster } from "sonner";
 import "./globals.css";
@@ -17,6 +18,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "adOS - Meta Ads Audit Platform",
   description: "Professional Meta (Facebook) Ads audit and analysis platform",
+  icons: {
+    icon: '/logo.png',
+    shortcut: '/logo.png',
+    apple: '/logo.png',
+  },
 };
 
 export default function RootLayout({
@@ -53,9 +59,11 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <AccountProvider>
-          {children}
-        </AccountProvider>
+        <AuthProvider>
+          <AccountProvider>
+            {children}
+          </AccountProvider>
+        </AuthProvider>
         <Toaster position="top-right" richColors />
       </body>
     </html>

@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 import { Area, AreaChart, XAxis, YAxis, Tooltip } from "recharts";
 import { AppLayout } from "@/components/AppLayout";
 import { 
@@ -101,6 +103,8 @@ export default function AdDetails() {
   const [activeVariation, setActiveVariation] = useState<string>("v1");
   const [loading, setLoading] = useState(true);
   const [selectedHooks, setSelectedHooks] = useState<Set<number>>(new Set());
+  const [regeneratingVariation, setRegeneratingVariation] = useState<string | null>(null);
+  const [isGeneratingVariations, setIsGeneratingVariations] = useState(false);
 
   // Handler to select/deselect all hooks
   const handleSelectAllHooks = () => {
@@ -325,6 +329,245 @@ export default function AdDetails() {
     } catch (error) {
       console.error("🧪 Test error:", error);
     }
+  };
+
+  // Function to generate a specific variation for the first time
+  const handleGenerateSingleVariation = async (variationKey: string) => {
+    console.log("✨ Generating variation:", variationKey);
+    
+    // Set loading state
+    setRegeneratingVariation(variationKey);
+    
+    // Show loading toast
+    const loadingToast = toast.loading(`Generating ${variationKey.toUpperCase()}...`, {
+      description: "This may take a few moments"
+    });
+    
+    try {
+      const requestBody = {
+        variation_number: variationKey,
+        ad_details: {
+          ad_id: adId,
+          ad_name: ad?.ad_name || ad?.creative_name,
+          analysis: ad?.analysis,
+          video_scenes: videoScenes,
+          performance: ad?.performance,
+          video_metrics: ad?.video_metrics
+        }
+      };
+      
+      console.log("✨ Generate variation request body:", JSON.stringify(requestBody, null, 2));
+      
+      const response = await fetch("https://n8n.srv931040.hstgr.cloud/webhook/generate-variation", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      console.log("✨ Generate variation response status:", response.status);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log("✨ Generate variation response data:", data);
+
+      // Process the response and update the specific variation
+      if (data && Array.isArray(data) && data.length > 0) {
+        // The webhook returns an array of scenes directly
+        const mergedVariations: AIVariationsResponse = variations ? { ...variations } : {};
+        mergedVariations[variationKey] = data as HookVariation[] | VideoSceneVariation[] | InstructionVariation[];
+        
+        console.log("✨ Updated variations:", mergedVariations);
+        setVariations(mergedVariations);
+        
+        // Dismiss loading toast and show success
+        toast.dismiss(loadingToast);
+        toast.success(`Successfully generated ${variationKey.toUpperCase()}!`, {
+          description: `${data.length} scenes have been generated`
+        });
+      } else {
+        throw new Error('Invalid response format from webhook');
+      }
+    } catch (error) {
+      console.error("✨ Generate variation error:", error);
+      
+      // Dismiss loading toast and show error
+      toast.dismiss(loadingToast);
+      toast.error('Failed to generate variation', {
+        description: error instanceof Error ? error.message : 'An unexpected error occurred. Please try again.'
+      });
+    } finally {
+      // Clear loading state
+      setRegeneratingVariation(null);
+    }
+  };
+
+  // Function to generate all variations for the first time
+  const handleGenerateAllVariations = async () => {
+    console.log("✨ Generating all variations for the first time");
+    
+    // Set loading state
+    setIsGeneratingVariations(true);
+    
+    // Show loading toast
+    const loadingToast = toast.loading('Generating AI Variations...', {
+      description: "This may take a few moments to generate all 7 variations"
+    });
+    
+    try {
+      const response = await fetch("https://n8n.srv931040.hstgr.cloud/webhook/generate-variation", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ad_details: {
+            ad_id: adId,
+            ad_name: ad?.ad_name || ad?.creative_name,
+            analysis: ad?.analysis,
+            video_scenes: videoScenes,
+            performance: ad?.performance,
+            video_metrics: ad?.video_metrics
+          }
+        })
+      });
+
+      console.log("✨ Generate variations response status:", response.status);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log("✨ Generate variations response data:", data);
+
+      // Process the response - should be an array of variation objects
+      if (data && Array.isArray(data) && data.length > 0) {
+        const mergedVariations: AIVariationsResponse = {};
+        
+        data.forEach((variationGroup: Record<string, unknown>) => {
+          Object.keys(variationGroup).forEach(key => {
+            if (variationGroup[key]) {
+              mergedVariations[key] = variationGroup[key] as HookVariation[] | VideoSceneVariation[] | InstructionVariation[];
+            }
+          });
+        });
+        
+        setVariations(mergedVariations);
+        
+        // Set the first variation as active
+        const firstKey = Object.keys(mergedVariations)[0];
+        if (firstKey) {
+          setActiveVariation(firstKey);
+        }
+        
+        // Dismiss loading toast and show success
+        toast.dismiss(loadingToast);
+        toast.success('Successfully generated AI variations!', {
+          description: `${Object.keys(mergedVariations).length} variations have been created`
+        });
+      } else {
+        throw new Error('Invalid response format from webhook');
+      }
+    } catch (error) {
+      console.error("✨ Generate variations error:", error);
+      
+      // Dismiss loading toast and show error
+      toast.dismiss(loadingToast);
+      toast.error('Failed to generate variations', {
+        description: error instanceof Error ? error.message : 'An unexpected error occurred. Please try again.'
+      });
+    } finally {
+      // Clear loading state
+      setIsGeneratingVariations(false);
+    }
+  };
+
+  // Function to regenerate a specific variation
+  const handleRegenerateVariation = async (variationKey: string) => {
+    console.log("🔄 Regenerating variation:", variationKey);
+    
+    // Set loading state
+    setRegeneratingVariation(variationKey);
+    
+    // Show loading toast
+    const loadingToast = toast.loading(`Regenerating ${variationKey.toUpperCase()}...`, {
+      description: "This may take a few moments"
+    });
+    
+    try {
+      const response = await fetch("https://n8n.srv931040.hstgr.cloud/webhook/1b50edb5-2278-4b49-9fc3-c3480e74adfd", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          variation_number: variationKey,
+          ad_details: {
+            ad_id: adId,
+            ad_name: ad?.ad_name || ad?.creative_name,
+            analysis: ad?.analysis,
+            video_scenes: videoScenes,
+            performance: ad?.performance,
+            video_metrics: ad?.video_metrics
+          }
+        })
+      });
+
+      console.log("🔄 Regenerate response status:", response.status);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log("🔄 Regenerate response data:", data);
+
+      // Process the response and update the specific variation
+      if (data && Array.isArray(data) && data.length > 0) {
+        // The webhook returns an array of scenes directly
+        const mergedVariations: AIVariationsResponse = { ...variations };
+        mergedVariations[variationKey] = data as HookVariation[] | VideoSceneVariation[] | InstructionVariation[];
+        
+        setVariations(mergedVariations);
+        
+        // Dismiss loading toast and show success
+        toast.dismiss(loadingToast);
+        toast.success(`Successfully regenerated ${variationKey.toUpperCase()}!`, {
+          description: `${data.length} scenes have been generated`
+        });
+      } else {
+        throw new Error('Invalid response format from webhook');
+      }
+    } catch (error) {
+      console.error("🔄 Regenerate error:", error);
+      
+      // Dismiss loading toast and show error
+      toast.dismiss(loadingToast);
+      toast.error('Failed to regenerate variation', {
+        description: error instanceof Error ? error.message : 'An unexpected error occurred. Please try again.'
+      });
+    } finally {
+      // Clear loading state
+      setRegeneratingVariation(null);
+    }
+  };
+
+  // Helper function to check if a scene has been changed in v2 compared to original
+  const isSceneChanged = (v2Scene: VideoSceneVariation, originalScenes: VideoScene[]) => {
+    const originalScene = originalScenes.find(s => s.scene === v2Scene.scene);
+    if (!originalScene) return true; // New scene
+    
+    // Compare script, visual, and text_overlay
+    const scriptChanged = originalScene.script !== v2Scene.script;
+    const visualChanged = originalScene.visual !== v2Scene.visual;
+    const textOverlayChanged = originalScene.text_overlay !== v2Scene.text_overlay;
+    
+    return scriptChanged || visualChanged || textOverlayChanged;
   };
 
   if (loading) {
@@ -1108,34 +1351,19 @@ export default function AdDetails() {
               </AccordionTrigger>
               <AccordionContent className="px-6 pb-6">
 
-                {/* Variation Tabs */}
+                {/* Always show tabs for V1-V7 */}
                 <Tabs value={activeVariation} onValueChange={setActiveVariation} className="w-full">
                   <TabsList className="grid w-full gap-1 grid-cols-7">
-                    {(() => {
-                      console.log("🎯 RENDER DEBUG: variations state:", variations);
-                      console.log("🎯 RENDER DEBUG: variations type:", typeof variations);
-                      console.log("🎯 RENDER DEBUG: variations keys:", variations ? Object.keys(variations) : 'null');
-                      console.log("🎯 RENDER DEBUG: variations length:", variations ? Object.keys(variations).length : 0);
-                      
-                      if (variations && Object.keys(variations).length > 0) {
-                        return Object.keys(variations).map((versionKey) => (
-                          <TabsTrigger key={versionKey} value={versionKey} className="text-xs">
-                            {versionKey.toUpperCase()}
-                          </TabsTrigger>
-                        ));
-                      } else {
-                        return (
-                          <div className="text-sm text-muted-foreground p-4">
-                            No variations data received. Check console logs.
-                          </div>
-                        );
-                      }
-                    })()}
+                    {['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7'].map((versionKey) => (
+                      <TabsTrigger key={versionKey} value={versionKey} className="text-xs">
+                        {versionKey.toUpperCase()}
+                      </TabsTrigger>
+                    ))}
                   </TabsList>
 
                   {/* V1 - Hook Replacement */}
-                  {variations?.v1 && (
-                    <TabsContent value="v1" className="mt-6">
+                  <TabsContent value="v1" className="mt-6">
+                    {variations?.v1 ? (
                       <div className="space-y-6">
                         <div className="flex items-center justify-between">
                           <div>
@@ -1168,80 +1396,119 @@ export default function AdDetails() {
                               <FileText className="h-4 w-4" />
                               Push to Brief Builder
                             </Button>
-                            <Button className="gap-2">
+                            <Button 
+                              className="gap-2"
+                              onClick={() => handleRegenerateVariation('v1')}
+                              disabled={regeneratingVariation === 'v1'}
+                            >
                               <Sparkles className="h-4 w-4" />
-                              Generate Creative
+                              {regeneratingVariation === 'v1' ? 'Regenerating...' : 'Regenerate'}
                             </Button>
                           </div>
                         </div>
 
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                          {variations.v1.map((hook) => {
-                            const isSelected = selectedHooks.has(hook.id);
-                            return (
-                              <div 
-                                key={hook.id} 
-                                onClick={() => handleHookToggle(hook.id)}
-                                className={`
-                                  relative p-4 rounded-lg cursor-pointer transition-all duration-200
-                                  ${isSelected 
-                                    ? 'bg-primary/20 border-2 border-primary shadow-lg shadow-primary/20 scale-[1.02]' 
-                                    : 'bg-primary/5 border-2 border-primary/20 hover:border-primary/40 hover:bg-primary/10'
-                                  }
-                                `}
-                              >
-                                {/* Selection Indicator */}
-                                <div className="absolute top-3 right-3 flex items-center gap-2">
-                                  <div className={`
-                                    w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all
-                                    ${isSelected 
-                                      ? 'bg-primary border-primary' 
-                                      : 'bg-background border-muted-foreground/30'
-                                    }
-                                  `}>
-                                    {isSelected && (
-                                      <svg className="w-4 h-4 text-primary-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                      </svg>
-                                    )}
-                                  </div>
+                          {regeneratingVariation === 'v1' ? (
+                            // Show skeleton loading when regenerating
+                            Array.from({ length: 4 }).map((_, index) => (
+                              <div key={`skeleton-${index}`} className="relative p-4 rounded-lg border-2 border-muted bg-muted/5">
+                                <div className="absolute top-3 right-3">
+                                  <Skeleton className="w-6 h-6 rounded-full" />
                                 </div>
                                 
                                 <div className="flex items-center gap-2 mb-3 mr-8">
-                                  <Badge variant="secondary" className="text-xs px-2 py-0.5">
-                                    Hook {hook.hook_num}
-                                  </Badge>
-                                  <Badge variant="outline" className="text-xs px-2 py-0.5">
-                                    Replaces: {hook.replace_scenes}
-                                  </Badge>
+                                  <Skeleton className="h-5 w-16" />
+                                  <Skeleton className="h-5 w-24" />
                                 </div>
                                 
                                 <div className="space-y-3">
                                   <div>
-                                    <h5 className="font-semibold text-xs text-muted-foreground uppercase mb-1">Script</h5>
-                                    <p className="text-sm text-foreground leading-relaxed">{hook.script}</p>
+                                    <Skeleton className="h-3 w-12 mb-2" />
+                                    <Skeleton className="h-4 w-full mb-1" />
+                                    <Skeleton className="h-4 w-5/6" />
                                   </div>
                                   
                                   <div>
-                                    <h5 className="font-semibold text-xs text-muted-foreground uppercase mb-1">Visual</h5>
-                                    <p className="text-xs text-muted-foreground leading-relaxed">{hook.visual}</p>
+                                    <Skeleton className="h-3 w-12 mb-2" />
+                                    <Skeleton className="h-3 w-full mb-1" />
+                                    <Skeleton className="h-3 w-4/6" />
                                   </div>
                                   
                                   <div>
-                                    <h5 className="font-semibold text-xs text-muted-foreground uppercase mb-1">Text Overlay</h5>
-                                    <div className="p-2 bg-muted/50 rounded text-xs font-mono leading-relaxed whitespace-pre-line">
-                                      {hook.text_overlay}
-                                    </div>
+                                    <Skeleton className="h-3 w-20 mb-2" />
+                                    <Skeleton className="h-16 w-full rounded" />
                                   </div>
                                 </div>
-
-                                {/* Click to select hint */}
-                                {!isSelected && (
-                                  <div className="absolute inset-0 rounded-lg opacity-0 hover:opacity-100 transition-opacity bg-gradient-to-t from-primary/10 to-transparent pointer-events-none" />
-                                )}
                               </div>
-                            );
-                          })}
+                            ))
+                          ) : (
+                            variations.v1.map((hook) => {
+                              const isSelected = selectedHooks.has(hook.id);
+                              return (
+                                <div 
+                                  key={hook.id} 
+                                  onClick={() => handleHookToggle(hook.id)}
+                                  className={`
+                                    relative p-4 rounded-lg cursor-pointer transition-all duration-200
+                                    ${isSelected 
+                                      ? 'bg-primary/20 border-2 border-primary shadow-lg shadow-primary/20 scale-[1.02]' 
+                                      : 'bg-primary/5 border-2 border-primary/20 hover:border-primary/40 hover:bg-primary/10'
+                                    }
+                                  `}
+                                >
+                                  {/* Selection Indicator */}
+                                  <div className="absolute top-3 right-3 flex items-center gap-2">
+                                    <div className={`
+                                      w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all
+                                      ${isSelected 
+                                        ? 'bg-primary border-primary' 
+                                        : 'bg-background border-muted-foreground/30'
+                                      }
+                                    `}>
+                                      {isSelected && (
+                                        <svg className="w-4 h-4 text-primary-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                      )}
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-2 mb-3 mr-8">
+                                    <Badge variant="secondary" className="text-xs px-2 py-0.5">
+                                      Hook {hook.hook_num}
+                                    </Badge>
+                                    <Badge variant="outline" className="text-xs px-2 py-0.5">
+                                      Replaces: {hook.replace_scenes}
+                                    </Badge>
+                                  </div>
+                                  
+                                  <div className="space-y-3">
+                                    <div>
+                                      <h5 className="font-semibold text-xs text-muted-foreground uppercase mb-1">Script</h5>
+                                      <p className="text-sm text-foreground leading-relaxed">{hook.script}</p>
+                                    </div>
+                                    
+                                    <div>
+                                      <h5 className="font-semibold text-xs text-muted-foreground uppercase mb-1">Visual</h5>
+                                      <p className="text-xs text-muted-foreground leading-relaxed">{hook.visual}</p>
+                                    </div>
+                                    
+                                    <div>
+                                      <h5 className="font-semibold text-xs text-muted-foreground uppercase mb-1">Text Overlay</h5>
+                                      <div className="p-2 bg-muted/50 rounded text-xs font-mono leading-relaxed whitespace-pre-line">
+                                        {hook.text_overlay}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Click to select hint */}
+                                  {!isSelected && (
+                                    <div className="absolute inset-0 rounded-lg opacity-0 hover:opacity-100 transition-opacity bg-gradient-to-t from-primary/10 to-transparent pointer-events-none" />
+                                  )}
+                                </div>
+                              );
+                            })
+                          )}
                         </div>
 
                         {selectedHooks.size > 0 && (
@@ -1256,13 +1523,31 @@ export default function AdDetails() {
                           </div>
                         )}
                       </div>
-                    </TabsContent>
-                  )}
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                        <div className="flex flex-col items-center text-center space-y-2">
+                          <Sparkles className="h-12 w-12 text-muted-foreground" />
+                          <h3 className="text-lg font-semibold">V1 - Hook Replacement</h3>
+                          <p className="text-sm text-muted-foreground max-w-md">
+                            Generate alternative hook variations to improve initial engagement
+                          </p>
+                        </div>
+                        <Button 
+                          size="lg"
+                          className="gap-2"
+                          onClick={() => handleGenerateSingleVariation('v1')}
+                          disabled={regeneratingVariation === 'v1'}
+                        >
+                          <Sparkles className="h-5 w-5" />
+                          {regeneratingVariation === 'v1' ? 'Generating...' : 'Generate Variation'}
+                        </Button>
+                      </div>
+                    )}
+                  </TabsContent>
 
                   {/* V2-V5 - Video Scene Variations */}
                   {(['v2', 'v3', 'v4', 'v5'] as const).map((versionKey) => {
                     const versionData = variations?.[versionKey];
-                    if (!versionData) return null;
 
                     const titles = {
                       v2: 'V2 - Video Metrics Optimization',
@@ -1280,85 +1565,174 @@ export default function AdDetails() {
 
                     return (
                       <TabsContent key={versionKey} value={versionKey} className="mt-6">
-                        <div className="space-y-6">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h3 className="text-lg font-semibold">{titles[versionKey]}</h3>
-                              <p className="text-sm text-muted-foreground">{descriptions[versionKey]}</p>
-                              <Badge variant="outline" className="mt-2">Scene Optimization</Badge>
+                        {versionData ? (
+                          <div className="space-y-6">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h3 className="text-lg font-semibold">{titles[versionKey]}</h3>
+                                <p className="text-sm text-muted-foreground">{descriptions[versionKey]}</p>
+                                <Badge variant="outline" className="mt-2">Scene Optimization</Badge>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button 
+                                  variant="secondary"
+                                  className="gap-2"
+                                  onClick={() => handlePushVariationToBriefBuilder(versionKey)}
+                                >
+                                  <FileText className="h-4 w-4" />
+                                  Push to Brief Builder
+                                </Button>
+                                <Button 
+                                  className="gap-2"
+                                  onClick={() => handleRegenerateVariation(versionKey)}
+                                  disabled={regeneratingVariation === versionKey}
+                                >
+                                  <Sparkles className="h-4 w-4" />
+                                  {regeneratingVariation === versionKey ? 'Regenerating...' : 'Regenerate'}
+                                </Button>
+                              </div>
                             </div>
-                            <div className="flex gap-2">
-                              <Button 
-                                variant="secondary"
-                                className="gap-2"
-                                onClick={() => handlePushVariationToBriefBuilder(versionKey)}
-                              >
-                                <FileText className="h-4 w-4" />
-                                Push to Brief Builder
-                              </Button>
-                              <Button className="gap-2">
-                                <Sparkles className="h-4 w-4" />
-                                Generate Creative
-                              </Button>
-                            </div>
-                          </div>
 
                           {/* Video Timeline */}
                           <div className="overflow-x-auto overflow-y-hidden scroll-smooth">
                             <div className="flex gap-3 py-2">
-                              {versionData.map((scene, index) => (
-                                <div key={scene.id} className="relative flex-shrink-0">
-                                  {/* Connecting Line */}
-                                  {index < versionData.length - 1 && (
-                                    <div className="absolute top-[80px] left-full w-3 h-[2px] bg-secondary z-0" />
-                                  )}
-                                  
-                                  {/* Scene Block */}
-                                  <Card className="w-[320px] border border-secondary/50 relative z-10 hover:border-secondary transition-colors flex flex-col h-[520px]">
-                                    <CardHeader className="p-3 pb-2 bg-secondary/5">
-                                      <div className="flex items-center justify-between">
-                                        <Badge className="bg-secondary text-secondary-foreground text-xs px-2 py-0.5">
-                                          Scene {scene.scene}
-                                        </Badge>
-                                        <span className="text-xs font-mono text-muted-foreground">
-                                          {scene.timestamp}
-                                        </span>
-                                      </div>
-                                    </CardHeader>
+                              {regeneratingVariation === versionKey ? (
+                                // Show skeleton loading when regenerating
+                                Array.from({ length: 5 }).map((_, index) => (
+                                  <div key={`skeleton-${index}`} className="relative flex-shrink-0">
+                                    {/* Connecting Line */}
+                                    {index < 4 && (
+                                      <div className="absolute top-[80px] left-full w-3 h-[2px] bg-secondary z-0" />
+                                    )}
                                     
-                                    <CardContent className="p-3 space-y-3 overflow-y-auto flex-1">
-                              {/* Script */}
-                              <div>
-                                <h5 className="font-semibold text-xs text-muted-foreground uppercase mb-1">Script</h5>
-                                <p className="text-xs text-foreground leading-tight">{scene.script || 'No script available'}</p>
-                              </div>
-                              
-                              {/* Visual Description */}
-                              <div>
-                                <h5 className="font-semibold text-xs text-muted-foreground uppercase mb-1">Visual</h5>
-                                <p className="text-xs text-foreground leading-tight">{scene.visual || 'No visual description available'}</p>
-                              </div>
-                                      
-                                      {/* Text Overlay */}
-                                      <div>
-                                        <h5 className="font-semibold text-xs text-muted-foreground uppercase mb-1">Text Overlay</h5>
-                                        <div className="bg-muted/50 p-2 rounded text-xs font-mono leading-tight whitespace-pre-line">
-                                          {scene.text_overlay || 'No text overlay'}
+                                    {/* Skeleton Scene Block */}
+                                    <Card className="w-[320px] relative z-10 flex flex-col h-[520px] border border-muted">
+                                      <CardHeader className="p-3 pb-2 bg-muted/5">
+                                        <div className="flex items-center justify-between">
+                                          <Skeleton className="h-5 w-16" />
+                                          <Skeleton className="h-4 w-20" />
                                         </div>
-                                      </div>
+                                      </CardHeader>
                                       
-                                      {/* Shot Type */}
-                                      <div>
-                                        <h5 className="font-semibold text-xs text-muted-foreground uppercase mb-1">Shot Type</h5>
-                                        <p className="text-xs text-muted-foreground italic leading-tight">{scene.shot_type || 'No shot type specified'}</p>
-                                      </div>
-                                    </CardContent>
-                                  </Card>
+                                      <CardContent className="p-3 space-y-3 overflow-y-auto flex-1">
+                                        <div>
+                                          <Skeleton className="h-3 w-12 mb-2" />
+                                          <Skeleton className="h-3 w-full mb-1" />
+                                          <Skeleton className="h-3 w-full mb-1" />
+                                          <Skeleton className="h-3 w-4/6" />
+                                        </div>
+                                        
+                                        <div>
+                                          <Skeleton className="h-3 w-12 mb-2" />
+                                          <Skeleton className="h-3 w-full mb-1" />
+                                          <Skeleton className="h-3 w-full mb-1" />
+                                          <Skeleton className="h-3 w-5/6" />
+                                        </div>
+                                        
+                                        <div>
+                                          <Skeleton className="h-3 w-20 mb-2" />
+                                          <Skeleton className="h-16 w-full rounded" />
+                                        </div>
+                                        
+                                        <div>
+                                          <Skeleton className="h-3 w-16 mb-2" />
+                                          <Skeleton className="h-3 w-full" />
+                                        </div>
+                                      </CardContent>
+                                    </Card>
+                                  </div>
+                                ))
+                              ) : (
+                                versionData.map((scene, index) => {
+                                  // Check if this is v2 and if the scene has changed
+                                  const isChanged = versionKey === 'v2' && isSceneChanged(scene, videoScenes);
+                                  
+                                  return (
+                                  <div key={scene.id} className="relative flex-shrink-0">
+                                    {/* Connecting Line */}
+                                    {index < versionData.length - 1 && (
+                                      <div className="absolute top-[80px] left-full w-3 h-[2px] bg-secondary z-0" />
+                                    )}
+                                    
+                                    {/* Scene Block - Highlight changed scenes in v2 with yellow border */}
+                                    <Card className={`w-[320px] relative z-10 transition-colors flex flex-col h-[520px] ${
+                                      isChanged 
+                                        ? 'border-[3px] border-yellow-500 hover:border-yellow-600' 
+                                        : 'border border-secondary/50 hover:border-secondary'
+                                    }`}>
+                                      <CardHeader className="p-3 pb-2 bg-secondary/5">
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-1.5">
+                                            <Badge className="bg-secondary text-secondary-foreground text-xs px-2 py-0.5">
+                                              Scene {scene.scene}
+                                            </Badge>
+                                            {isChanged && (
+                                              <Badge className="bg-yellow-500 text-black text-xs px-2 py-0.5 font-semibold">
+                                                NEW
+                                              </Badge>
+                                            )}
+                                          </div>
+                                          <span className="text-xs font-mono text-muted-foreground">
+                                            {scene.timestamp}
+                                          </span>
+                                        </div>
+                                      </CardHeader>
+                                      
+                                      <CardContent className="p-3 space-y-3 overflow-y-auto flex-1">
+                                {/* Script */}
+                                <div>
+                                  <h5 className="font-semibold text-xs text-muted-foreground uppercase mb-1">Script</h5>
+                                  <p className="text-xs text-foreground leading-tight">{scene.script || 'No script available'}</p>
                                 </div>
-                              ))}
+                                
+                                {/* Visual Description */}
+                                <div>
+                                  <h5 className="font-semibold text-xs text-muted-foreground uppercase mb-1">Visual</h5>
+                                  <p className="text-xs text-foreground leading-tight">{scene.visual || 'No visual description available'}</p>
+                                </div>
+                                        
+                                        {/* Text Overlay */}
+                                        <div>
+                                          <h5 className="font-semibold text-xs text-muted-foreground uppercase mb-1">Text Overlay</h5>
+                                          <div className="bg-muted/50 p-2 rounded text-xs font-mono leading-tight whitespace-pre-line">
+                                            {scene.text_overlay || 'No text overlay'}
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Shot Type */}
+                                        <div>
+                                          <h5 className="font-semibold text-xs text-muted-foreground uppercase mb-1">Shot Type</h5>
+                                          <p className="text-xs text-muted-foreground italic leading-tight">{scene.shot_type || 'No shot type specified'}</p>
+                                        </div>
+                                      </CardContent>
+                                    </Card>
+                                  </div>
+                                  );
+                                })
+                              )}
                             </div>
                           </div>
-                        </div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                            <div className="flex flex-col items-center text-center space-y-2">
+                              <Sparkles className="h-12 w-12 text-muted-foreground" />
+                              <h3 className="text-lg font-semibold">{titles[versionKey]}</h3>
+                              <p className="text-sm text-muted-foreground max-w-md">
+                                {descriptions[versionKey]}
+                              </p>
+                            </div>
+                            <Button 
+                              size="lg"
+                              className="gap-2"
+                              onClick={() => handleGenerateSingleVariation(versionKey)}
+                              disabled={regeneratingVariation === versionKey}
+                            >
+                              <Sparkles className="h-5 w-5" />
+                              {regeneratingVariation === versionKey ? 'Generating...' : 'Generate Variation'}
+                            </Button>
+                          </div>
+                        )}
                       </TabsContent>
                     );
                   })}
@@ -1366,7 +1740,6 @@ export default function AdDetails() {
                   {/* V6 & V7 - Instructions */}
                   {(['v6', 'v7'] as const).map((versionKey) => {
                     const versionData = variations?.[versionKey];
-                    if (!versionData) return null;
 
                     const titles = {
                       v6: 'V6 - Multiple Creator Re-recording',
@@ -1380,18 +1753,19 @@ export default function AdDetails() {
 
                     return (
                       <TabsContent key={versionKey} value={versionKey} className="mt-6">
-                        <div className="space-y-6">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h3 className="text-lg font-semibold">{titles[versionKey]}</h3>
-                              <p className="text-sm text-muted-foreground">{descriptions[versionKey]}</p>
-                              <Badge variant="outline" className="mt-2">Production Instructions</Badge>
+                        {versionData ? (
+                          <div className="space-y-6">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h3 className="text-lg font-semibold">{titles[versionKey]}</h3>
+                                <p className="text-sm text-muted-foreground">{descriptions[versionKey]}</p>
+                                <Badge variant="outline" className="mt-2">Production Instructions</Badge>
+                              </div>
+                              <Button className="gap-2">
+                                <Sparkles className="h-4 w-4" />
+                                Start Production
+                              </Button>
                             </div>
-                            <Button className="gap-2">
-                              <Sparkles className="h-4 w-4" />
-                              Start Production
-                            </Button>
-                          </div>
 
                           <div className="space-y-4">
                             {versionData.map((instruction, index) => (
@@ -1406,7 +1780,27 @@ export default function AdDetails() {
                               </div>
                             ))}
                           </div>
-                        </div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                            <div className="flex flex-col items-center text-center space-y-2">
+                              <Sparkles className="h-12 w-12 text-muted-foreground" />
+                              <h3 className="text-lg font-semibold">{titles[versionKey]}</h3>
+                              <p className="text-sm text-muted-foreground max-w-md">
+                                {descriptions[versionKey]}
+                              </p>
+                            </div>
+                            <Button 
+                              size="lg"
+                              className="gap-2"
+                              onClick={() => handleGenerateSingleVariation(versionKey)}
+                              disabled={regeneratingVariation === versionKey}
+                            >
+                              <Sparkles className="h-5 w-5" />
+                              {regeneratingVariation === versionKey ? 'Generating...' : 'Generate Variation'}
+                            </Button>
+                          </div>
+                        )}
                       </TabsContent>
                     );
                   })}

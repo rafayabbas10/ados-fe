@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { AdAccount } from '@/types';
 import { fetchAdAccounts } from '@/services/accountsService';
+import { useAuth } from './AuthContext';
 
 interface AccountContextType {
   selectedAccountId: string;
@@ -18,35 +19,61 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
   const [accounts, setAccounts] = useState<AdAccount[]>([]);
   const [loading, setLoading] = useState(true);
+  const { user, isAuthenticated } = useAuth();
+  
+  // Track if we've loaded to prevent duplicate loads
+  const hasLoadedRef = React.useRef(false);
 
   useEffect(() => {
     const loadAccounts = async () => {
+      // Don't load if not authenticated
+      if (!isAuthenticated || !user) {
+        console.log('⚠️ Not authenticated, clearing accounts');
+        setLoading(false);
+        setAccounts([]);
+        hasLoadedRef.current = false;
+        return;
+      }
+
+      // Only load once per session
+      if (hasLoadedRef.current) {
+        console.log('✅ Accounts already loaded, skipping');
+        return;
+      }
+
+      setLoading(true);
+      console.log("📊 Loading accounts for:", user.email, "ID:", user.id);
+
       try {
-        console.log("📊 Loading accounts in context...");
-        const accountsData = await fetchAdAccounts();
-        console.log("✅ Accounts loaded in context:", accountsData);
+        // Pass user_id to webhook - backend will filter accounts
+        const accountsData = await fetchAdAccounts(user.id);
+        
+        console.log(`✅ Received ${accountsData.length} accounts from webhook`);
+        
         setAccounts(accountsData);
         
-        // Check for saved account in localStorage first
+        // Restore saved account or select first
         const savedAccountId = localStorage.getItem("selectedAccountId");
-        
         if (savedAccountId && accountsData.find(acc => acc.id === savedAccountId)) {
-          console.log("🔄 Restoring saved account:", savedAccountId);
           setSelectedAccountId(savedAccountId);
+          console.log("✅ Restored account:", savedAccountId);
         } else if (accountsData.length > 0) {
-          console.log("🔄 Auto-selecting first account in context:", accountsData[0].id);
           setSelectedAccountId(accountsData[0].id);
           localStorage.setItem("selectedAccountId", accountsData[0].id);
+          console.log("✅ Selected first account:", accountsData[0].id);
         }
+        
+        hasLoadedRef.current = true;
       } catch (error) {
-        console.error("❌ Failed to load accounts in context:", error);
+        console.error("❌ Failed to load accounts:", error);
+        setAccounts([]);
       } finally {
         setLoading(false);
       }
     };
     
     loadAccounts();
-  }, []); // Remove selectedAccountId dependency to prevent infinite loop
+  }, [isAuthenticated, user?.id]); // Only reload if auth state or user ID changes
 
   const handleSetSelectedAccountId = (accountId: string) => {
     setSelectedAccountId(accountId);
@@ -55,11 +82,17 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   };
 
   const refreshAccounts = async () => {
+    if (!isAuthenticated || !user) {
+      return;
+    }
+
     setLoading(true);
     try {
-      console.log("🔄 Refreshing accounts...");
-      const accountsData = await fetchAdAccounts();
-      console.log("✅ Accounts refreshed:", accountsData);
+      console.log("🔄 Refreshing accounts for user:", user.id);
+      // Pass user_id to webhook - backend will filter accounts
+      const accountsData = await fetchAdAccounts(user.id);
+      console.log("✅ Accounts refreshed:", accountsData.length);
+      
       setAccounts(accountsData);
       
       // Check if selected account still exists

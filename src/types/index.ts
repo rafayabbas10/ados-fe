@@ -284,3 +284,41 @@ export interface ImageBlocksResponse {
 export interface ImageVariationsResponse {
   data: ImageVariation[];
 }
+
+// Authentication Types
+export type UserRole = 'Admin' | 'Strategist' | 'Client';
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  assignedAccounts?: string[]; // For Strategists - array of ad account IDs they can access
+  createdAt: string;
+  createdBy?: string; // ID of admin who created this user
+}
+
+export interface AuthContextType {
+  user: User | null;
+  isAuthenticated: boolean;
+  login: (email: string, password: string) => Promise<boolean>;
+  logout: () => void;
+  users: User[]; // All users (Admin only)
+  addUser: (user: Omit<User, 'id' | 'createdAt'>) => Promise<{ success: boolean; password?: string; error?: string }>;
+  updateUser: (userId: string, updates: Partial<User>) => Promise<boolean>;
+  deleteUser: (userId: string) => void;
+  hasPermission: (permission: Permission) => boolean;
+}
+
+export type Permission = 
+  | 'view_all_accounts'
+  | 'manage_users'
+  | 'manage_ad_accounts'
+  | 'view_assigned_accounts_only'
+  | 'access_workflow_only';
+
+export interface ClientAccess {
+  workflowId: string;
+  password: string;
+  expiresAt?: string;
+}
