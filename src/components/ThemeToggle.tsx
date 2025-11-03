@@ -4,7 +4,11 @@ import { Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 
-export function ThemeToggle() {
+interface ThemeToggleProps {
+  isCollapsed?: boolean;
+}
+
+export function ThemeToggle({ isCollapsed = false }: ThemeToggleProps) {
   const [theme, setTheme] = useState<"light" | "dark" | null>(null);
 
   useEffect(() => {
@@ -26,9 +30,14 @@ export function ThemeToggle() {
   // Don't render until theme is determined to prevent flash
   if (theme === null) {
     return (
-      <Button variant="outline" size="sm" className="gap-2" disabled>
+      <Button 
+        variant="outline" 
+        size={isCollapsed ? "icon" : "sm"} 
+        className={isCollapsed ? "h-8 w-8" : "gap-2"} 
+        disabled
+      >
         <div className="h-4 w-4" />
-        Theme
+        {!isCollapsed && "Theme"}
       </Button>
     );
   }
@@ -48,12 +57,30 @@ export function ThemeToggle() {
     }
   };
 
+  if (isCollapsed) {
+    return (
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={toggleTheme}
+        className="h-8 w-8"
+        title={theme === "light" ? "Switch to Dark Mode" : "Switch to Light Mode"}
+      >
+        {theme === "light" ? (
+          <Moon className="h-4 w-4" />
+        ) : (
+          <Sun className="h-4 w-4" />
+        )}
+      </Button>
+    );
+  }
+
   return (
     <Button
       variant="outline"
       size="sm"
       onClick={toggleTheme}
-      className="gap-2"
+      className="gap-2 w-full"
     >
       {theme === "light" ? (
         <>
