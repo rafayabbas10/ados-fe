@@ -93,7 +93,7 @@ export function AIAgentProvider({ children }: { children: ReactNode }) {
   const [selectedElement, setSelectedElement] = useState<ElementKey | null>(null);
   const [selectedElementLabel, setSelectedElementLabel] = useState<string | null>(null);
   const [selectedBlocks, setSelectedBlocks] = useState<string[]>([]);
-  const [selectedBlockDetails, setSelectedBlockDetails] = useState<Array<{id: string; order: number; scriptLine: string; sceneDescription: string}>>([]);
+  const [selectedBlockDetails, setSelectedBlockDetails] = useState<Array<{id: string; order: number; scriptLine?: string; sceneDescription?: string; text?: string; design_notes?: string}>>([]);
   
   // Loading States
   const [loadingTargets, setLoadingTargets] = useState<Set<string>>(new Set());
@@ -128,7 +128,7 @@ export function AIAgentProvider({ children }: { children: ReactNode }) {
     }
   }, []);
   
-  const selectBlocks = useCallback((blockIds: string[], blockDetails?: Array<{id: string; order: number; scriptLine: string; sceneDescription: string}>) => {
+  const selectBlocks = useCallback((blockIds: string[], blockDetails?: Array<{id: string; order: number; scriptLine?: string; sceneDescription?: string; text?: string; design_notes?: string}>) => {
     setSelectedBlocks(blockIds);
     setSelectedBlockDetails(blockDetails || []);
     // Clear element selection when selecting blocks
@@ -138,7 +138,7 @@ export function AIAgentProvider({ children }: { children: ReactNode }) {
     }
   }, []);
   
-  const toggleBlock = useCallback((blockId: string, blockDetail?: {id: string; order: number; scriptLine: string; sceneDescription: string}) => {
+  const toggleBlock = useCallback((blockId: string, blockDetail?: {id: string; order: number; scriptLine?: string; sceneDescription?: string; text?: string; design_notes?: string}) => {
     setSelectedBlocks(prev => {
       if (prev.includes(blockId)) {
         return prev.filter(id => id !== blockId);
@@ -375,7 +375,8 @@ export function AIAgentProvider({ children }: { children: ReactNode }) {
   
   // Send message to AI
   const sendMessage = useCallback(async (message: string, context?: FrontendContext) => {
-    if (!selectedAdId || isStreaming) return;
+    // Allow sending messages in consultation mode (without selectedAdId)
+    if (isStreaming) return;
     
     // Capture selected element info before clearing
     const elementInfo = selectedElement && selectedElementLabel ? {
@@ -433,8 +434,8 @@ export function AIAgentProvider({ children }: { children: ReactNode }) {
           // Send detailed block info instead of just IDs
           frontendContext.selected_blocks = selectedBlockDetails.map(block => ({
             scene_number: block.order,
-            script: block.scriptLine,
-            visual: block.sceneDescription
+            script: block.scriptLine || '',
+            visual: block.sceneDescription || ''
           }));
         }
       }
@@ -444,8 +445,10 @@ export function AIAgentProvider({ children }: { children: ReactNode }) {
           message,
           thread_id: threadId,
           session_id: sessionId,
-          audit_ad_id: selectedAdId,
-          ad_account_id: selectedAccountId,
+          // Only include audit_ad_id if an ad is selected (consultation mode doesn't require it)
+          ...(selectedAdId && { audit_ad_id: selectedAdId }),
+          // Only include ad_account_id if an account is selected
+          ...(selectedAccountId && { ad_account_id: selectedAccountId }),
           frontend_context: Object.keys(frontendContext).length > 0 ? frontendContext : undefined,
           stream: true,
         },

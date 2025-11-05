@@ -66,6 +66,7 @@ export interface UpdatedBlocksEvent {
     id: string;
     scene?: number;
     order?: number;
+    // Script block properties
     type?: string;
     scriptLine?: string;
     visual?: string;
@@ -73,6 +74,12 @@ export interface UpdatedBlocksEvent {
     audio?: string;
     timestamp?: string;
     shot_type?: string;
+    // Image block properties
+    element?: string;
+    position?: string;
+    content_type?: string;
+    text?: string;
+    design_notes?: string;
   }>;
   selective?: boolean;  // If true, only update specified blocks
 }
@@ -96,7 +103,8 @@ export type UICommand =
   | ShowLoadingCommand
   | HighlightElementCommand
   | HighlightBlocksCommand
-  | StartBlockLoadingCommand;
+  | StartBlockLoadingCommand
+  | ShowAdSelectorCommand;
 
 export interface StartBlockLoadingCommand {
   command: 'START_BLOCK_LOADING';
@@ -164,11 +172,18 @@ export interface UpdateBlocksCommand {
       id: string;
       scene?: number;
       order?: number;
+      // Script block properties
       type?: string;
       scriptLine?: string;
       audio?: string;
       visual?: string;
       textOverlay?: string;
+      // Image block properties
+      element?: string;
+      position?: string;
+      content_type?: string;
+      text?: string;
+      design_notes?: string;
     }>;
     selective?: boolean;  // If true, only update specified blocks
   };
@@ -194,6 +209,13 @@ export interface HighlightBlocksCommand {
   command: 'HIGHLIGHT_BLOCKS';
   data: {
     block_ids: string[];
+  };
+}
+
+export interface ShowAdSelectorCommand {
+  command: 'SHOW_AD_SELECTOR';
+  data: {
+    message?: string;
   };
 }
 
@@ -236,6 +258,14 @@ export interface BriefInitializationData {
     script: string;
     visual_description: string;
     text_overlay?: string;
+  }>;
+  image_blocks?: Array<{
+    block_no: number;
+    element: string;
+    position: string;
+    content_type: string;
+    text: string;
+    design_notes: string;
   }>;
 }
 

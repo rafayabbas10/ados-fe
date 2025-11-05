@@ -12,9 +12,9 @@ import { useAccount } from "@/contexts/AccountContext";
 import { AIAgentProvider, useAIAgent } from "@/contexts/AIAgentContext";
 import { ScriptVariations, ScriptVariation } from "@/components/ui/ScriptVariations";
 import { Creative } from "@/services/creativesService";
-import { fetchVideoScenes, fetchAdDetails } from "@/services/adDetailsService";
+import { fetchVideoScenes, fetchAdDetails, fetchImageBlocks } from "@/services/adDetailsService";
 import { fetchVariableSelectorOptions, VariableSelectorOptions } from "@/services/variableSelectorService";
-import { VideoScene, HookVariation, VideoSceneVariation } from "@/types";
+import { VideoScene, HookVariation, VideoSceneVariation, ImageBlock } from "@/types";
 import { streamChat } from "@/services/aiAgentService";
 import { StreamEvent, UICommand, InitializeBriefCommand, UpdateElementCommand, UpdateBlocksCommand, ShowLoadingCommand, HighlightElementCommand, StartBlockLoadingCommand, ElementKey, BriefInitializationData, UpdatedBlocksEvent } from "@/types/ai";
 import {
@@ -26,6 +26,7 @@ import {
   LoadingOverlay,
   MediaViewerWidget,
 } from "@/components/ai";
+import { ImageBuilder } from "@/components/ui/ImageBuilder";
 
 interface BriefData {
   id: string;
@@ -90,6 +91,7 @@ function BriefBuilderContent() {
     sessionId,
     selectedBlocks,
     toggleBlock,
+    messages,
   } = useAIAgent();
   
   const [selectedBrief, setSelectedBrief] = useState<BriefData | null>(null);
@@ -97,6 +99,13 @@ function BriefBuilderContent() {
   const [activeVariation, setActiveVariation] = useState('var-1');
   const [adThumbnail, setAdThumbnail] = useState<string>('');
   const [adFormat, setAdFormat] = useState<string>('');
+  const [imageBlocks, setImageBlocks] = useState<ImageBlock[]>([]);
+  const [showAdSelectorTrigger, setShowAdSelectorTrigger] = useState(0);
+  
+  // Debug: Track trigger changes
+  useEffect(() => {
+    console.log('🔔 showAdSelectorTrigger changed to:', showAdSelectorTrigger);
+  }, [showAdSelectorTrigger]);
   
   // Variable selector states
   const [briefName, setBriefName] = useState("");
@@ -136,8 +145,11 @@ function BriefBuilderContent() {
   
   // Track recently updated blocks for animations and badges
   const [recentlyUpdatedBlocks, setRecentlyUpdatedBlocks] = useState<Set<string>>(new Set());
+  
+  // Track if AI has been initialized for image ads
+  const imageAIInitializedRef = useRef(false);
 
-  // Helper function to build brief initialization data
+  // Helper function to build brief initialization data for video ads
   const buildBriefData = useCallback((
     blocks: ScriptBlock[],
     elements?: {
@@ -164,6 +176,38 @@ function BriefBuilderContent() {
         script: block.scriptLine,
         visual_description: block.sceneDescription,
         text_overlay: block.textOverlays && block.textOverlays.length > 0 ? block.textOverlays[0] : undefined,
+      })),
+    };
+  }, []);
+
+  // Helper function to build brief initialization data for image ads
+  const buildImageBriefData = useCallback((
+    blocks: ImageBlock[],
+    elements?: {
+      avatar?: string;
+      awarenessLevel?: string;
+      angle?: string;
+      format?: string;
+      theme?: string;
+      tonality?: string;
+    }
+  ): BriefInitializationData => {
+    return {
+      elements: {
+        avatar: elements?.avatar || undefined,
+        awareness: elements?.awarenessLevel || undefined,
+        angle: elements?.angle || undefined,
+        format: elements?.format || undefined,
+        theme: elements?.theme || undefined,
+        tonality: elements?.tonality || undefined,
+      },
+      image_blocks: blocks.map((block, index) => ({
+        block_no: block.order || index + 1,
+        element: block.element,
+        position: block.position,
+        content_type: block.content_type,
+        text: block.text,
+        design_notes: block.design_notes,
       })),
     };
   }, []);
@@ -220,6 +264,44 @@ function BriefBuilderContent() {
 
     loadVariableOptions();
   }, [selectedAccountId]);
+
+  // Initialize AI for image ads once imageBlocks are loaded
+  useEffect(() => {
+    // Only initialize once, and only if we have image blocks and haven't initialized yet
+    if (imageBlocks.length > 0 && 
+        selectedAccountId && 
+        selectedAdId && 
+        adFormat?.toLowerCase().includes('image') &&
+        !imageAIInitializedRef.current) {
+      
+      console.log('🎨 Initializing AI with image blocks:', {
+        blockCount: imageBlocks.length,
+        adId: selectedAdId,
+        accountId: selectedAccountId,
+        format: adFormat
+      });
+      imageAIInitializedRef.current = true;
+      
+      const elements = {
+        avatar,
+        awarenessLevel,
+        angle,
+        format,
+        theme,
+        tonality,
+      };
+      
+      console.log('📋 Elements:', elements);
+      
+      const briefData = buildImageBriefData(imageBlocks, elements);
+      console.log('📦 Brief data for image ad:', JSON.stringify(briefData, null, 2));
+      
+      initializeAI(selectedAdId, selectedAccountId, briefData).catch(err => {
+        console.error('❌ Failed to initialize AI:', err);
+        imageAIInitializedRef.current = false; // Reset flag on error so user can retry
+      });
+    }
+  }, [imageBlocks, selectedAccountId, selectedAdId, adFormat, avatar, awarenessLevel, angle, format, theme, tonality, buildImageBriefData, initializeAI]);
 
   // Handler for v1 - Hook variations
   const populateFromHookVariations = (data: BriefBuilderData) => {
@@ -389,10 +471,24 @@ function BriefBuilderContent() {
 
   const populateFromCreative = async (creative: Creative): Promise<void> => {
     setBriefName(creative.name);
-    setAdThumbnail(creative.ad_type === 'video' ? creative.ad_video_link : creative.link);
-    setAdFormat(creative.ad_type === 'video' ? 'UGC Video' : 'Static Image');
     
     const adDetails = await fetchAdDetails(creative.id.toString());
+    
+    // Set thumbnail and format based on ad type
+    // Use analysis.video_content_link for both video and image ads (same as ad details page)
+    const mediaUrl = adDetails?.analysis?.video_content_link || adDetails?.video_url || creative.ad_video_link || creative.link;
+    
+    console.log('🎬 Media URL from analysis:', adDetails?.analysis?.video_content_link);
+    console.log('🎬 Media URL from video_url:', adDetails?.video_url);
+    console.log('✅ Using media URL:', mediaUrl);
+    
+    setAdThumbnail(mediaUrl);
+    
+    if (creative.ad_type === 'video') {
+      setAdFormat('UGC Video');
+    } else {
+      setAdFormat('Static Image');
+    }
     
     // Capture element values for brief initialization
     const elements = {
@@ -443,9 +539,25 @@ function BriefBuilderContent() {
       } catch (error) {
         console.error('Error fetching video scenes:', error);
       }
+    } else {
+      // For image ads, fetch image blocks instead
+      try {
+        const imageBlocksResponse = await fetchImageBlocks(creative.id.toString());
+        if (imageBlocksResponse && imageBlocksResponse.length > 0 && imageBlocksResponse[0]?.data) {
+          // Add order property to each block
+          const blocksWithOrder = imageBlocksResponse[0].data.map((block, index) => ({
+            ...block,
+            order: index + 1
+          }));
+          setImageBlocks(blocksWithOrder);
+          console.log('✅ Loaded image blocks:', blocksWithOrder);
+        }
+      } catch (error) {
+        console.error('Error fetching image blocks:', error);
+      }
     }
 
-    if (scriptBlocks.length === 0) {
+    if (scriptBlocks.length === 0 && creative.ad_type === 'video') {
       scriptBlocks = [{
         id: `block-${Date.now()}-1`,
         type: 'Curiosity/Intrigue Hook',
@@ -462,11 +574,11 @@ function BriefBuilderContent() {
       id: `brief-${Date.now()}`,
       title: briefName || creative.name,
       creativeId: creative.id,
-      avatar: avatar,
-      awarenessLevel: awarenessLevel,
-      angle: angle,
-      format: format,
-      theme: theme,
+      avatar: elements.avatar,
+      awarenessLevel: elements.awarenessLevel,
+      angle: elements.angle,
+      format: elements.format,
+      theme: elements.theme,
       scriptBlocks: scriptBlocks
     };
 
@@ -483,10 +595,14 @@ function BriefBuilderContent() {
     setActiveVariation(initialVariation.id);
     
     // Initialize AI with ad context and brief data
-    if (selectedAccountId && scriptBlocks.length > 0) {
+    if (selectedAccountId) {
       setAdContext(creative.id.toString(), creative.name);
-      const briefData = buildBriefData(scriptBlocks, elements);
-      initializeAI(creative.id.toString(), selectedAccountId, briefData);
+      
+      if (creative.ad_type === 'video' && scriptBlocks.length > 0) {
+        const briefData = buildBriefData(scriptBlocks, elements);
+        initializeAI(creative.id.toString(), selectedAccountId, briefData);
+      }
+      // For image ads, initialization will happen in useEffect after imageBlocks are set
     }
   };
 
@@ -516,6 +632,7 @@ function BriefBuilderContent() {
   // Handle ad selection from empty state
   const handleAdSelect = async (ad: Creative) => {
     setLayoutMode('full');
+    imageAIInitializedRef.current = false; // Reset flag for new ad
     await populateFromCreative(ad);
   };
 
@@ -701,53 +818,115 @@ function BriefBuilderContent() {
         const blockIdsToRemoveLoading: string[] = [];
         const updatedBlockIds: string[] = [];
         
-        // Update blocks in current variation - match by order/scene, not ID
-        setScriptVariations(prev => {
-          const updated = [...prev];
-          const activeVar = updated.find(v => v.id === activeVariation);
-          if (activeVar) {
+        // Determine if these are script blocks or image blocks based on properties
+        // Prioritize image block detection since backend may send hybrid format
+        const firstBlock = blocksCmd.data.blocks[0];
+        const isImageBlocks = firstBlock && ('position' in firstBlock || 'content_type' in firstBlock || 'design_notes' in firstBlock);
+        const isScriptBlocks = firstBlock && !isImageBlocks && ('scriptLine' in firstBlock || 'audio' in firstBlock);
+        
+        console.log('🔍 Block type detection:', { isScriptBlocks, isImageBlocks, firstBlock });
+        
+        if (isScriptBlocks) {
+          // Update script blocks in current variation - match by order/scene, not ID
+          setScriptVariations(prev => {
+            const updated = [...prev];
+            const activeVar = updated.find(v => v.id === activeVariation);
+            if (activeVar) {
+              blocksCmd.data.blocks.forEach(updatedBlock => {
+                // Match by order or scene number (backend sends different IDs)
+                const order = updatedBlock.order || updatedBlock.scene || 0;
+                const blockIndex = activeVar.blocks.findIndex(b => b.order === order);
+                
+                if (blockIndex !== -1) {
+                  const existingBlock = activeVar.blocks[blockIndex];
+                  
+                  // Collect block ID for loading removal and tracking
+                  blockIdsToRemoveLoading.push(existingBlock.id);
+                  updatedBlockIds.push(existingBlock.id);
+                  
+                  // Update block data (keep frontend ID, update content)
+                  activeVar.blocks[blockIndex] = {
+                    ...existingBlock,
+                    ...(updatedBlock.scriptLine && { scriptLine: updatedBlock.scriptLine }),
+                    ...(updatedBlock.audio && { audioType: updatedBlock.audio }),
+                    ...(updatedBlock.visual && { sceneDescription: updatedBlock.visual }),
+                    ...(updatedBlock.textOverlay && { textOverlays: [updatedBlock.textOverlay] }),
+                    ...(updatedBlock.type && { type: updatedBlock.type }),
+                  };
+                }
+              });
+            }
+            return updated;
+          });
+          
+          // Remove loading states and add to recently updated (with stars animation)
+          setTimeout(() => {
+            removeLoadingTarget('script_builder');
+            blockIdsToRemoveLoading.forEach(blockId => {
+              removeLoadingTarget(`block-${blockId}`);
+            });
+            
+            // Mark blocks as recently updated for badges and animation
+            setRecentlyUpdatedBlocks(new Set(updatedBlockIds));
+            
+            // Clear recently updated after 5 seconds
+            setTimeout(() => {
+              setRecentlyUpdatedBlocks(new Set());
+            }, 5000);
+          }, 0);
+        } else if (isImageBlocks) {
+          // Update image blocks - match by order, not ID
+          setImageBlocks(prev => {
+            const updated = [...prev];
+            
             blocksCmd.data.blocks.forEach(updatedBlock => {
-              // Match by order or scene number (backend sends different IDs)
               const order = updatedBlock.order || updatedBlock.scene || 0;
-              const blockIndex = activeVar.blocks.findIndex(b => b.order === order);
+              const blockIndex = updated.findIndex(b => (b.order || 0) === order);
               
               if (blockIndex !== -1) {
-                const existingBlock = activeVar.blocks[blockIndex];
+                const existingBlock = updated[blockIndex];
                 
                 // Collect block ID for loading removal and tracking
-                blockIdsToRemoveLoading.push(existingBlock.id);
-                updatedBlockIds.push(existingBlock.id);
+                const blockId = existingBlock.id.toString();
+                blockIdsToRemoveLoading.push(blockId);
+                updatedBlockIds.push(blockId);
                 
                 // Update block data (keep frontend ID, update content)
-                activeVar.blocks[blockIndex] = {
+                updated[blockIndex] = {
                   ...existingBlock,
-                  ...(updatedBlock.scriptLine && { scriptLine: updatedBlock.scriptLine }),
-                  ...(updatedBlock.audio && { audioType: updatedBlock.audio }),
-                  ...(updatedBlock.visual && { sceneDescription: updatedBlock.visual }),
-                  ...(updatedBlock.textOverlay && { textOverlays: [updatedBlock.textOverlay] }),
-                  ...(updatedBlock.type && { type: updatedBlock.type }),
+                  ...(updatedBlock.element && { element: updatedBlock.element }),
+                  ...(updatedBlock.position && { position: updatedBlock.position }),
+                  ...(updatedBlock.content_type && { content_type: updatedBlock.content_type }),
+                  ...(updatedBlock.text && { text: updatedBlock.text }),
+                  ...(updatedBlock.design_notes && { design_notes: updatedBlock.design_notes }),
+                  // Handle alternate naming from backend
+                  ...(updatedBlock.scriptLine && { text: updatedBlock.scriptLine }), // scriptLine maps to text
+                  ...(updatedBlock.textOverlay && { text: updatedBlock.textOverlay }), // textOverlay maps to text
+                  ...(updatedBlock.visual && { design_notes: updatedBlock.visual }), // visual maps to design_notes
+                  ...(updatedBlock.type && { element: updatedBlock.type }), // type maps to element
                 };
               }
             });
-          }
-          return updated;
-        });
-        
-        // Remove loading states and add to recently updated (with stars animation)
-        setTimeout(() => {
-          removeLoadingTarget('script_builder');
-          blockIdsToRemoveLoading.forEach(blockId => {
-            removeLoadingTarget(`block-${blockId}`);
+            
+            return updated;
           });
           
-          // Mark blocks as recently updated for badges and animation
-          setRecentlyUpdatedBlocks(new Set(updatedBlockIds));
-          
-          // Clear recently updated after 5 seconds
+          // Remove loading states and add to recently updated (with stars animation)
           setTimeout(() => {
-            setRecentlyUpdatedBlocks(new Set());
-          }, 5000);
-        }, 0);
+            removeLoadingTarget('image_builder');
+            blockIdsToRemoveLoading.forEach(blockId => {
+              removeLoadingTarget(`block-${blockId}`);
+            });
+            
+            // Mark blocks as recently updated for badges and animation
+            setRecentlyUpdatedBlocks(new Set(updatedBlockIds));
+            
+            // Clear recently updated after 5 seconds
+            setTimeout(() => {
+              setRecentlyUpdatedBlocks(new Set());
+            }, 5000);
+          }, 0);
+        }
         
         // Clear the last updated element reference
         if (lastUpdatedElementRef.current) {
@@ -759,7 +938,7 @@ function BriefBuilderContent() {
         const loadingCmd = command as ShowLoadingCommand;
         
         // Ignore SHOW_LOADING if we just received blocks (prevents indefinite loading)
-        if (justReceivedBlocksRef.current && loadingCmd.data.target === 'script_builder') {
+        if (justReceivedBlocksRef.current && (loadingCmd.data.target === 'script_builder' || loadingCmd.data.target === 'image_builder')) {
           console.log('⏭️ Ignoring redundant SHOW_LOADING (blocks already received)');
           break;
         }
@@ -769,6 +948,13 @@ function BriefBuilderContent() {
           const activeVar = scriptVariations.find(v => v.id === activeVariation);
           if (activeVar && activeVar.blocks.length > 0) {
             activeVar.blocks.forEach(block => {
+              addLoadingTarget(`block-${block.id}`);
+            });
+          }
+        } else if (loadingCmd.data.target === 'image_builder') {
+          // Add loading for image_builder as individual block loaders
+          if (imageBlocks.length > 0) {
+            imageBlocks.forEach(block => {
               addLoadingTarget(`block-${block.id}`);
             });
           }
@@ -788,18 +974,46 @@ function BriefBuilderContent() {
         
       case 'START_BLOCK_LOADING':
         // Triggered when regenerate_script tool starts
-        console.log('🔄 Starting block loading (regenerate_script started)');
-        const activeVar2 = scriptVariations.find(v => v.id === activeVariation);
-        if (activeVar2 && activeVar2.blocks.length > 0) {
-          activeVar2.blocks.forEach(block => {
-            addLoadingTarget(`block-${block.id}`);
-          });
+        console.log('🔄 Starting block loading (regenerate_script/regenerate_image started)');
+        
+        // Check if we should load script blocks or image blocks based on current ad format
+        if (adFormat?.toLowerCase().includes('video')) {
+          const activeVar2 = scriptVariations.find(v => v.id === activeVariation);
+          if (activeVar2 && activeVar2.blocks.length > 0) {
+            activeVar2.blocks.forEach(block => {
+              addLoadingTarget(`block-${block.id}`);
+            });
+          }
+        } else if (adFormat?.toLowerCase().includes('image')) {
+          // Show loading on image blocks
+          if (imageBlocks.length > 0) {
+            imageBlocks.forEach(block => {
+              addLoadingTarget(`block-${block.id}`);
+            });
+          }
+        }
+        break;
+        
+      case 'SHOW_AD_SELECTOR':
+        // AI is requesting to show the ad selector (consultation → edit mode transition)
+        // Only open if the AI actually called the request_ad_selector tool
+        const lastAIMessage = messages[messages.length - 1];
+        const hasRequestAdSelectorTool = lastAIMessage?.role === 'ai' && 
+          lastAIMessage.toolCalls?.some((tc: { tool: string }) => tc.tool === 'request_ad_selector');
+        
+        if (hasRequestAdSelectorTool) {
+          console.log('✅ AI used request_ad_selector tool - incrementing trigger');
+          setShowAdSelectorTrigger(prev => prev + 1);
+        } else {
+          console.log('⚠️ SHOW_AD_SELECTOR command received but request_ad_selector tool was not called - ignoring');
         }
         break;
     }
   }, [
     activeVariation, 
     scriptVariations,
+    imageBlocks,
+    adFormat,
     addLoadingTarget, 
     removeLoadingTarget,
     triggerElementSuccess,
@@ -808,7 +1022,8 @@ function BriefBuilderContent() {
     angle, 
     format, 
     theme, 
-    tonality
+    tonality,
+    messages
   ]);
 
   // Set up AI streaming event handler - use ref to avoid recreating
@@ -880,7 +1095,9 @@ function BriefBuilderContent() {
     };
   }, [
     scriptVariations, 
-    activeVariation, 
+    activeVariation,
+    imageBlocks,
+    adFormat,
     addLoadingTarget, 
     removeLoadingTarget, 
     triggerElementSuccess,
@@ -1032,6 +1249,11 @@ function BriefBuilderContent() {
     setActiveVariation(newVariation.id);
   };
 
+  // Image Blocks Handlers
+  const handleUpdateImageBlocks = (updatedBlocks: ImageBlock[]) => {
+    setImageBlocks(updatedBlocks);
+  };
+
   const handleReset = () => {
     resetAI();
     setBriefName('');
@@ -1050,13 +1272,20 @@ function BriefBuilderContent() {
     }]);
     setActiveVariation('var-1');
     setSelectedBrief(null);
+    setImageBlocks([]);
+    setAdThumbnail('');
+    setAdFormat('');
+    imageAIInitializedRef.current = false; // Reset initialization flag
   };
 
   // Show empty state if no ad is selected
   if (layoutMode === 'empty' && !selectedAdId) {
     return (
       <AppLayout>
-        <EmptyBriefState onAdSelect={handleAdSelect} />
+        <EmptyBriefState 
+          onAdSelect={handleAdSelect}
+          adSelectorTrigger={showAdSelectorTrigger}
+        />
       </AppLayout>
     );
   }
@@ -1180,42 +1409,66 @@ function BriefBuilderContent() {
                     </div>
                   </Card>
 
-                  {/* Script Builder - with loading overlay */}
-                  <div id="script-builder-card" className="space-y-6 relative">
-                    {loadingTargets.has('script_builder') && (
-                      <LoadingOverlay message="🤖 AI is regenerating your script..." />
-                    )}
-                    
-                    <ScriptVariations
-                      variations={scriptVariations}
-                      onUpdateVariation={handleUpdateVariation}
-                      onDeleteVariation={handleDeleteVariation}
-                      onCloneVariation={handleCloneVariation}
-                      onSetPrimary={handleSetPrimary}
-                      onPushToProduction={handlePushToProduction}
-                      onAddVariation={handleAddVariation}
-                      showMetadata={showMetadata}
-                      setShowMetadata={setShowMetadata}
-                      generateNamingConvention={generateNamingConvention}
-                      activeVariation={activeVariation}
-                      onActiveVariationChange={setActiveVariation}
-                      loadingTargets={loadingTargets}
-                      selectedBlocks={selectedBlocks}
-                      onToggleBlock={toggleBlock}
-                      recentlyUpdatedBlocks={recentlyUpdatedBlocks}
-                    />
+                  {/* Script Builder or Image Blocks - based on ad type */}
+                  {adFormat?.toLowerCase().includes('video') ? (
+                    <div id="script-builder-card" className="space-y-6 relative">
+                      {loadingTargets.has('script_builder') && (
+                        <LoadingOverlay message="🤖 AI is regenerating your script..." />
+                      )}
+                      
+                      <ScriptVariations
+                        variations={scriptVariations}
+                        onUpdateVariation={handleUpdateVariation}
+                        onDeleteVariation={handleDeleteVariation}
+                        onCloneVariation={handleCloneVariation}
+                        onSetPrimary={handleSetPrimary}
+                        onPushToProduction={handlePushToProduction}
+                        onAddVariation={handleAddVariation}
+                        showMetadata={showMetadata}
+                        setShowMetadata={setShowMetadata}
+                        generateNamingConvention={generateNamingConvention}
+                        activeVariation={activeVariation}
+                        onActiveVariationChange={setActiveVariation}
+                        loadingTargets={loadingTargets}
+                        selectedBlocks={selectedBlocks}
+                        onToggleBlock={toggleBlock}
+                        recentlyUpdatedBlocks={recentlyUpdatedBlocks}
+                      />
 
-                    {/* Push to Production Button */}
-                    <div className="flex justify-center pt-4">
-                      <Button 
-                        className="bg-primary hover:bg-primary/90 text-white px-8 py-6 text-lg"
-                        onClick={() => handlePushToProduction(activeVariation)}
-                      >
-                        <Send className="w-5 h-5 mr-2" />
-                        Push Brief to Production Workflow
-                      </Button>
+                      {/* Push to Production Button */}
+                      <div className="flex justify-center pt-4">
+                        <Button 
+                          className="bg-primary hover:bg-primary/90 text-white px-8 py-6 text-lg"
+                          onClick={() => handlePushToProduction(activeVariation)}
+                        >
+                          <Send className="w-5 h-5 mr-2" />
+                          Push Brief to Production Workflow
+                        </Button>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="space-y-6">
+                      <ImageBuilder
+                        blocks={imageBlocks}
+                        onUpdateBlocks={handleUpdateImageBlocks}
+                        loadingTargets={loadingTargets}
+                        selectedBlocks={selectedBlocks}
+                        onToggleBlock={toggleBlock}
+                        recentlyUpdatedBlocks={recentlyUpdatedBlocks}
+                      />
+                      
+                      {/* Push to Production Button for Image Ads */}
+                      <div className="flex justify-center pt-4">
+                        <Button 
+                          className="bg-primary hover:bg-primary/90 text-white px-8 py-6 text-lg"
+                          onClick={() => handlePushToProduction(activeVariation)}
+                        >
+                          <Send className="w-5 h-5 mr-2" />
+                          Push Brief to Production Workflow
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             }
@@ -1231,6 +1484,7 @@ function BriefBuilderContent() {
           adName={adName || undefined}
         />
       )}
+      
     </AppLayout>
   );
 }

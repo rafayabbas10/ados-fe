@@ -1,6 +1,8 @@
 "use client";
 
 import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { ChatMessage as ChatMessageType } from '@/types/ai';
 import { useAIAgent } from '@/contexts/AIAgentContext';
 import { OptionsSelector } from './OptionsSelector';
@@ -109,8 +111,38 @@ function AIMessage({ message, onFollowUpClick }: ChatMessageProps) {
           {message.isStreaming && !message.content ? (
             <TypingIndicator />
           ) : (
-            <div className="text-sm text-foreground whitespace-pre-wrap break-words">
-              {message.content}
+            <div className="text-sm text-foreground markdown-content">
+              <ReactMarkdown 
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  h1: ({node, ...props}) => <h1 className="text-lg font-semibold mt-4 mb-2 first:mt-0" {...props} />,
+                  h2: ({node, ...props}) => <h2 className="text-base font-semibold mt-3 mb-2 first:mt-0" {...props} />,
+                  h3: ({node, ...props}) => <h3 className="text-sm font-semibold mt-2 mb-1 first:mt-0" {...props} />,
+                  p: ({node, ...props}) => <p className="my-2 first:mt-0 last:mb-0" {...props} />,
+                  strong: ({node, ...props}) => <strong className="font-semibold text-foreground" {...props} />,
+                  em: ({node, ...props}) => <em className="italic" {...props} />,
+                  ul: ({node, ...props}) => <ul className="list-disc list-inside my-2 space-y-1" {...props} />,
+                  ol: ({node, ...props}) => <ol className="list-decimal list-inside my-2 space-y-1" {...props} />,
+                  li: ({node, ...props}) => <li className="leading-relaxed" {...props} />,
+                  code: ({node, className, children, ...props}) => {
+                    const isInline = !className;
+                    return isInline ? (
+                      <code className="bg-muted-foreground/10 px-1.5 py-0.5 rounded text-xs font-mono" {...props}>
+                        {children}
+                      </code>
+                    ) : (
+                      <code className="block bg-muted-foreground/10 px-3 py-2 rounded my-2 text-xs font-mono overflow-x-auto" {...props}>
+                        {children}
+                      </code>
+                    );
+                  },
+                  blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-primary/30 pl-4 italic my-2" {...props} />,
+                  a: ({node, ...props}) => <a className="text-primary hover:underline" {...props} />,
+                  hr: ({node, ...props}) => <hr className="my-4 border-border" {...props} />,
+                }}
+              >
+                {message.content}
+              </ReactMarkdown>
               {message.isStreaming && <span className="animate-pulse">▊</span>}
             </div>
           )}

@@ -37,7 +37,7 @@ export function ChatPanel() {
   }, [inputValue]);
   
   const handleSend = async () => {
-    if (!inputValue.trim() || isStreaming || !selectedAdId) return;
+    if (!inputValue.trim() || isStreaming) return;
     
     await sendMessage(inputValue.trim());
     setInputValue('');

@@ -259,12 +259,13 @@ export interface VideoBlock {
 
 // Image-specific types
 export interface ImageBlock {
-  id: number;
+  id: number | string;
   element: string;
   position: string;
   content_type: string;
   text: string;
   design_notes: string;
+  order?: number;
 }
 
 export interface ImageVariation {
