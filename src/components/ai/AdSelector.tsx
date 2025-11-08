@@ -133,7 +133,7 @@ function AdItem({ ad, onClick }: { ad: Creative; onClick: () => void }) {
     <button
       onClick={onClick}
       className={cn(
-        "w-full px-4 py-3 flex items-center gap-3 hover:bg-accent transition-colors text-left",
+        "w-full px-4 py-3 flex items-center gap-3 hover:bg-accent transition-colors text-left overflow-hidden",
         "border-b border-border last:border-0"
       )}
     >
@@ -170,18 +170,18 @@ function AdItem({ ad, onClick }: { ad: Creative; onClick: () => void }) {
       </div>
       
       {/* Info */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-xs font-mono text-muted-foreground">#{ad.id}</span>
-          <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+      <div className="flex-1 min-w-0 max-w-[calc(100%-72px)] overflow-hidden">
+        <div className="flex items-center gap-2 mb-1 overflow-hidden">
+          <span className="text-xs font-mono text-muted-foreground flex-shrink-0">#{ad.id}</span>
+          <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium flex-shrink-0">
             {ad.ad_type}
           </span>
         </div>
-        <p className="text-sm font-medium text-foreground truncate">{ad.name}</p>
-        <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-          <span>Spend: ${ad.spend.toFixed(2)}</span>
-          <span>•</span>
-          <span>ROAS: {ad.roas.toFixed(2)}x</span>
+        <p className="text-sm font-medium text-foreground truncate overflow-hidden whitespace-nowrap max-w-[100px]" title={ad.name}>{ad.name}</p>
+        <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground overflow-hidden">
+          <span className="flex-shrink-0">Spend: ${ad.spend.toFixed(2)}</span>
+          <span className="flex-shrink-0">•</span>
+          <span className="flex-shrink-0">ROAS: {ad.roas.toFixed(2)}x</span>
         </div>
       </div>
     </button>

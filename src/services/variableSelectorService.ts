@@ -25,7 +25,29 @@ export const fetchVariableSelectorOptions = async (accountId: string): Promise<V
       throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
     }
 
-    const data = await response.json();
+    // Check if response has content before parsing JSON
+    const text = await response.text();
+    if (!text || text.trim() === '') {
+      console.warn("⚠️ Empty response body, returning empty options");
+      return {
+        avatar: [],
+        market_awareness: [],
+        angle: [],
+        format: [],
+        theme: [],
+        tonality: []
+      };
+    }
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (parseError) {
+      console.error("❌ Failed to parse JSON:", parseError);
+      console.error("Response text:", text);
+      throw new Error(`Invalid JSON response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+    }
+    
     console.log("✅ Raw webhook response:", data);
     
     // Transform the array of objects into a single object with all keys

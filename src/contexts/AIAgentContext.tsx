@@ -264,8 +264,10 @@ export function AIAgentProvider({ children }: { children: ReactNode }) {
             return updated;
           });
           
-          // If regenerate_script starts, signal page to add block loading
-          if (event.tool === 'regenerate_script' && event.status === 'started') {
+          // If regenerate_script or regenerate_image starts, signal page to add block loading
+          const isRegenerateTool = event.tool === 'regenerate_script' || event.tool === 'regenerate_image';
+          
+          if (isRegenerateTool && event.status === 'started') {
             const customWindow = window as unknown as CustomWindow;
             if (typeof window !== 'undefined' && customWindow.__briefBuilderUICommandHandler) {
               customWindow.__briefBuilderUICommandHandler({
@@ -275,6 +277,26 @@ export function AIAgentProvider({ children }: { children: ReactNode }) {
                   data: {}
                 }]
               });
+            }
+          }
+          
+          // If regenerate tool completes/fails, stop loading (failsafe if UPDATE_BLOCKS not sent)
+          const eventStatus = event.status;
+          if (isRegenerateTool && (eventStatus === 'completed' || eventStatus === 'failed')) {
+            const customWindow = window as unknown as CustomWindow;
+            if (typeof window !== 'undefined' && customWindow.__briefBuilderUICommandHandler) {
+              // Delay slightly to ensure UPDATE_BLOCKS is processed first if it's coming
+              setTimeout(() => {
+                if (customWindow.__briefBuilderUICommandHandler) {
+                  customWindow.__briefBuilderUICommandHandler({
+                    type: 'ui_command' as const,
+                    commands: [{
+                      command: 'STOP_BLOCK_LOADING' as const,
+                      data: {}
+                    }]
+                  });
+                }
+              }, 1000);
             }
           }
         }

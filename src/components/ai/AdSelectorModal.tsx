@@ -148,7 +148,7 @@ function AdCard({ ad, onClick }: { ad: Creative; onClick: () => void }) {
     <button
       onClick={onClick}
       className={cn(
-        "w-full p-4 flex items-center gap-4 rounded-lg border-2 border-border bg-card",
+        "w-full p-4 flex items-center gap-4 rounded-lg border-2 border-border bg-card overflow-hidden",
         "hover:border-primary hover:shadow-md transition-all duration-200",
         "text-left group"
       )}
@@ -186,13 +186,13 @@ function AdCard({ ad, onClick }: { ad: Creative; onClick: () => void }) {
       </div>
       
       {/* Info */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-xs font-mono px-2 py-1 rounded bg-muted text-muted-foreground">
+      <div className="flex-1 min-w-0 max-w-[calc(100%-140px)] overflow-hidden">
+        <div className="flex items-center gap-2 mb-2 overflow-hidden">
+          <span className="text-xs font-mono px-2 py-1 rounded bg-muted text-muted-foreground flex-shrink-0">
             #{ad.id}
           </span>
           <span className={cn(
-            "text-xs px-2 py-1 rounded font-medium",
+            "text-xs px-2 py-1 rounded font-medium flex-shrink-0",
             ad.ad_type === 'video' 
               ? "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
               : "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
@@ -200,15 +200,18 @@ function AdCard({ ad, onClick }: { ad: Creative; onClick: () => void }) {
             {ad.ad_type}
           </span>
         </div>
-        <p className="text-base font-semibold text-foreground truncate mb-1 group-hover:text-primary transition-colors">
+        <p 
+          className="text-base font-semibold text-foreground truncate mb-1 group-hover:text-primary transition-colors overflow-hidden whitespace-nowrap max-w-[500px]"
+          title={ad.name}
+        >
           {ad.name}
         </p>
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-          <div className="flex items-center gap-1">
+        <div className="flex items-center gap-4 text-sm text-muted-foreground overflow-hidden">
+          <div className="flex items-center gap-1 flex-shrink-0">
             <DollarSign className="w-4 h-4" />
             <span>${ad.spend.toFixed(2)}</span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 flex-shrink-0">
             <TrendingUp className="w-4 h-4" />
             <span>{ad.roas.toFixed(2)}x ROAS</span>
           </div>
@@ -216,7 +219,7 @@ function AdCard({ ad, onClick }: { ad: Creative; onClick: () => void }) {
       </div>
       
       {/* Arrow indicator */}
-      <div className="text-muted-foreground group-hover:text-primary transition-colors">
+      <div className="text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0">
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>

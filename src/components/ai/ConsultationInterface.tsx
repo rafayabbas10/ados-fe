@@ -267,7 +267,7 @@ export function ConsultationInterface({ onAdSelect, adSelectorTrigger }: Consult
               <span>Creative Strategist AI</span>
             </div>
             <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-              Build something <span className="text-primary">Brilliant</span>
+              Build something <span className="text-primary">Brillian</span>
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
               Get strategic advice on your ad creatives. Refine angles, optimize hooks, and craft winning briefs by chatting with AI.

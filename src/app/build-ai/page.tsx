@@ -994,6 +994,27 @@ function BriefBuilderContent() {
         }
         break;
         
+      case 'STOP_BLOCK_LOADING':
+        // Triggered when regenerate tool completes (failsafe if UPDATE_BLOCKS not sent)
+        console.log('✅ Stopping block loading');
+        
+        // Remove loading from all blocks
+        if (adFormat?.toLowerCase().includes('video')) {
+          const activeVar3 = scriptVariations.find(v => v.id === activeVariation);
+          if (activeVar3 && activeVar3.blocks.length > 0) {
+            activeVar3.blocks.forEach(block => {
+              removeLoadingTarget(`block-${block.id}`);
+            });
+          }
+        } else if (adFormat?.toLowerCase().includes('image')) {
+          if (imageBlocks.length > 0) {
+            imageBlocks.forEach(block => {
+              removeLoadingTarget(`block-${block.id}`);
+            });
+          }
+        }
+        break;
+        
       case 'SHOW_AD_SELECTOR':
         // AI is requesting to show the ad selector (consultation → edit mode transition)
         // Only open if the AI actually called the request_ad_selector tool

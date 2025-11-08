@@ -24,7 +24,7 @@ export type LayoutMode =
 export interface ToolCallEvent {
   type: 'tool_call';
   tool: string;
-  status: 'started' | 'completed';
+  status: 'started' | 'completed' | 'failed';
   message?: string;
 }
 
@@ -104,10 +104,16 @@ export type UICommand =
   | HighlightElementCommand
   | HighlightBlocksCommand
   | StartBlockLoadingCommand
+  | StopBlockLoadingCommand
   | ShowAdSelectorCommand;
 
 export interface StartBlockLoadingCommand {
   command: 'START_BLOCK_LOADING';
+  data: Record<string, never>;
+}
+
+export interface StopBlockLoadingCommand {
+  command: 'STOP_BLOCK_LOADING';
   data: Record<string, never>;
 }
 
@@ -237,7 +243,7 @@ export interface ChatMessage {
 export interface ToolCall {
   id: string;
   tool: string;
-  status: 'started' | 'completed';
+  status: 'started' | 'completed' | 'failed';
   message?: string;
   timestamp: Date;
 }
