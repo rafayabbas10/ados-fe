@@ -3,8 +3,8 @@
 import { ChatRequest, StreamEvent, AIConfig } from '@/types/ai';
 
 const DEFAULT_CONFIG: AIConfig = {
-  apiBaseUrl: process.env.NEXT_PUBLIC_AI_API_URL || 'http://localhost:8000/api/v1',
-  // apiBaseUrl: process.env.NEXT_PUBLIC_AI_API_URL || 'https://creative-strategist-agent.onrender.com/api/v1',
+  // apiBaseUrl: process.env.NEXT_PUBLIC_AI_API_URL || 'http://localhost:8000/api/v1',
+  apiBaseUrl: process.env.NEXT_PUBLIC_AI_API_URL || 'https://creative-strategist-agent.onrender.com/api/v1',
   streamTimeout: 180000, // 3 minutes - AI operations can take time
   retryAttempts: 3,
 };
