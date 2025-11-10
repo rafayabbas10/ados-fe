@@ -8,7 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AppLayout } from "@/components/AppLayout";
+import { AnalysisProgressStepper } from "@/components/AnalysisProgressStepper";
 import { useAccount } from "@/contexts/AccountContext";
 import { 
   FileText, 
@@ -16,10 +18,30 @@ import {
   BarChart3,
   Calendar,
   Plus,
-  RefreshCw
+  RefreshCw,
+  Search,
+  Send,
+  Image as ImageIcon,
+  Eye,
+  DollarSign,
+  ExternalLink,
+  Brain,
+  Target,
+  TrendingUp,
+  Users,
+  Sparkles
 } from "lucide-react";
-import { AuditReport } from "@/types";
-import { fetchReportsByAccountId } from "@/services/reportsService";
+import { AuditReport, ReportSummary } from "@/types";
+import { fetchReportsByAccountId, fetchReportSummary } from "@/services/reportsService";
+import { fetchCreativesByAccountId, Creative } from "@/services/creativesService";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 // Interface for top performing ads from webhook
 interface TopPerformingAd {
@@ -37,20 +59,56 @@ export default function Dashboard() {
   const { selectedAccountId, accounts } = useAccount();
   const [reports, setReports] = useState<AuditReport[]>([]);
   const [topAds, setTopAds] = useState<TopPerformingAd[]>([]);
+  const [allCreatives, setAllCreatives] = useState<Creative[]>([]);
+  const [auditSummary, setAuditSummary] = useState<ReportSummary | null>(null);
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [adsLoading, setAdsLoading] = useState(true);
+  const [creativesLoading, setCreativesLoading] = useState(true);
+  const [summaryLoading, setSummaryLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshingAds, setRefreshingAds] = useState(false);
   const [mediaLoadingStates, setMediaLoadingStates] = useState<Record<string, boolean>>({});
   const [mediaErrorStates, setMediaErrorStates] = useState<Record<string, boolean>>({});
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expandedHooks, setExpandedHooks] = useState<Set<number>>(new Set());
+  const [selectedCreativeIds, setSelectedCreativeIds] = useState<Set<number>>(new Set());
   const [formData, setFormData] = useState({
     accountId: '',
     startDate: '',
     endDate: '',
     topAdsCount: '10'
   });
+
+  // Column widths state for creatives table
+  const [columnWidths, setColumnWidths] = useState({
+    select: 50,
+    icon: 48,
+    name: 180,
+    hook: 280,
+    type: 80,
+    spend: 96,
+    roas: 80,
+    views: 96,
+    thumbstop: 96,
+    holdRate: 96,
+    ctr: 80,
+    actions: 160
+  });
+  
+  const [resizing, setResizing] = useState<string | null>(null);
+  const [startX, setStartX] = useState(0);
+  const [startWidth, setStartWidth] = useState(0);
+
+  // Get the latest audit report
+  const latestReport = reports.length > 0 
+    ? reports.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+    : null;
+
+  // Determine if we should show the progress section (only show for in-progress stages, not when complete)
+  const showProgressSection = latestReport && 
+    ['processing initiated', 'ad analysis complete', 'ad blocks created', 'summary created'].includes(latestReport.status);
 
   // Function to refresh reports data
   const refreshReports = async (accountId: string, silent: boolean = true) => {
@@ -63,12 +121,38 @@ export default function Dashboard() {
       const reportsData = await fetchReportsByAccountId(accountId);
       setReports(reportsData);
       console.log("✅ Reports refreshed:", reportsData.length);
+      
+      // If we have a latest report with summary, fetch it
+      if (reportsData.length > 0) {
+        const latest = reportsData.sort((a, b) => 
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )[0];
+        
+        // Only fetch summary if report is at summary stage or complete
+        if (latest.status === 'summary created' || latest.status === 'complete') {
+          await fetchSummaryForReport(latest.id);
+        }
+      }
     } catch (error) {
       console.error("❌ Failed to refresh reports:", error);
     } finally {
       if (silent) {
         setRefreshing(false);
       }
+    }
+  };
+
+  // Function to fetch summary for a report
+  const fetchSummaryForReport = async (reportId: number) => {
+    try {
+      setSummaryLoading(true);
+      const summaryData = await fetchReportSummary(reportId.toString());
+      setAuditSummary(summaryData);
+    } catch (error) {
+      console.error("❌ Failed to fetch summary:", error);
+      setAuditSummary(null);
+    } finally {
+      setSummaryLoading(false);
     }
   };
 
@@ -149,21 +233,101 @@ export default function Dashboard() {
     }
   };
 
+  // Function to load all creatives
+  const loadAllCreatives = async (accountId: string) => {
+    try {
+      setCreativesLoading(true);
+      const creativesData = await fetchCreativesByAccountId(accountId);
+      setAllCreatives(creativesData);
+      
+      // Pre-select first 5 creatives
+      if (creativesData.length > 0 && selectedCreativeIds.size === 0) {
+        const firstFive = new Set(creativesData.slice(0, 5).map(c => c.id));
+        setSelectedCreativeIds(firstFive);
+      }
+      
+      console.log("✅ All creatives loaded:", creativesData.length);
+    } catch (error) {
+      console.error("❌ Failed to load all creatives:", error);
+    } finally {
+      setCreativesLoading(false);
+    }
+  };
+
+  // Toggle creative selection for Top Creatives section
+  const toggleCreativeSelection = (creativeId: number) => {
+    setSelectedCreativeIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(creativeId)) {
+        newSet.delete(creativeId);
+      } else {
+        // Limit to 5 selections
+        if (newSet.size >= 5) {
+          // Remove the oldest selection (first item in the set)
+          const firstItem = Array.from(newSet)[0];
+          newSet.delete(firstItem);
+        }
+        newSet.add(creativeId);
+      }
+      return newSet;
+    });
+  };
+
+  // Get creatives to display in Top Creatives section (based on selection)
+  const getDisplayedTopCreatives = () => {
+    // If nothing selected, show first 5 from allCreatives (or fallback to topAds)
+    if (selectedCreativeIds.size === 0) {
+      if (allCreatives.length > 0) {
+        return allCreatives.slice(0, 5).map(creative => ({
+          id: creative.id,
+          name: creative.name,
+          link: creative.link,
+          spend: creative.spend,
+          roas: creative.roas,
+          total_views: creative.total_views,
+          ad_video_link: creative.ad_video_link,
+          ad_type: creative.ad_type
+        }));
+      }
+      return topAds.slice(0, 5);
+    }
+    
+    // Get selected creatives from allCreatives list
+    const selectedCreatives = allCreatives
+      .filter(creative => selectedCreativeIds.has(creative.id))
+      .slice(0, 5);
+    
+    // Map to TopPerformingAd format
+    return selectedCreatives.map(creative => ({
+      id: creative.id,
+      name: creative.name,
+      link: creative.link,
+      spend: creative.spend,
+      roas: creative.roas,
+      total_views: creative.total_views,
+      ad_video_link: creative.ad_video_link,
+      ad_type: creative.ad_type
+    }));
+  };
+
   useEffect(() => {
     const loadDashboardData = async () => {
       if (!selectedAccountId) {
         setDashboardLoading(false);
         setAdsLoading(false);
+        setCreativesLoading(false);
+        setSummaryLoading(false);
         return;
       }
 
       setDashboardLoading(true);
       setAdsLoading(true);
+      setCreativesLoading(true);
       
       try {
         console.log("📊 Loading dashboard data for account:", selectedAccountId);
         
-        // Load reports and top ads in parallel
+        // Load reports, top ads, and all creatives in parallel
         const [reportsData, topAdsData] = await Promise.all([
           fetchReportsByAccountId(selectedAccountId),
           fetchTopPerformingAds(selectedAccountId)
@@ -171,6 +335,25 @@ export default function Dashboard() {
         
         setReports(reportsData);
         setTopAds(topAdsData);
+        
+        // Load all creatives separately (non-blocking)
+        loadAllCreatives(selectedAccountId);
+        
+        // If we have reports, fetch summary for the latest one
+        if (reportsData.length > 0) {
+          const latest = reportsData.sort((a, b) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          )[0];
+          
+          // Only fetch summary if report is at summary stage or complete
+          if (latest.status === 'summary created' || latest.status === 'complete') {
+            await fetchSummaryForReport(latest.id);
+          } else {
+            setSummaryLoading(false);
+          }
+        } else {
+          setSummaryLoading(false);
+        }
         
         // Reset media loading states when new ads are loaded
         setMediaLoadingStates({});
@@ -182,6 +365,7 @@ export default function Dashboard() {
         });
       } catch (error) {
         console.error("❌ Failed to load dashboard data:", error);
+        setSummaryLoading(false);
       } finally {
         setDashboardLoading(false);
         setAdsLoading(false);
@@ -223,21 +407,53 @@ export default function Dashboard() {
       console.log("🧹 Cleaning up top ads auto-refresh interval");
       clearInterval(interval);
     };
-  }, [selectedAccountId, refreshTopAds]);
+  }, [selectedAccountId]);
+
+  // Column resize handlers
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!resizing) return;
+      
+      const diff = e.clientX - startX;
+      const newWidth = Math.max(50, startWidth + diff); // Minimum width of 50px
+      
+      setColumnWidths(prev => ({
+        ...prev,
+        [resizing]: newWidth
+      }));
+    };
+
+    const handleMouseUp = () => {
+      setResizing(null);
+    };
+
+    if (resizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [resizing, startX, startWidth]);
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
+      case 'complete':
       case 'completed':
         return 'bg-green-500 text-white';
+      case 'processing initiated':
+      case 'ad analysis complete':
+      case 'ad blocks created':
+      case 'summary created':
       case 'processing':
         return 'bg-blue-500 text-white';
       case 'failed':
-        return 'bg-red-500 text-white';
-      case 'active':
-        return 'bg-green-500 text-white';
-      case 'paused':
-        return 'bg-yellow-500 text-black';
-      case 'disabled':
         return 'bg-red-500 text-white';
       default:
         return 'bg-gray-500 text-white';
@@ -258,6 +474,16 @@ export default function Dashboard() {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
+  };
+
+  const formatNumber = (num: number) => {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1) + 'M';
+    }
+    if (num >= 1000) {
+      return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toString();
   };
 
   const formatDate = (dateString: string) => {
@@ -300,6 +526,38 @@ export default function Dashboard() {
   const isMediaLoading = (adId: string) => mediaLoadingStates[adId] || false;
   const hasMediaError = (adId: string) => mediaErrorStates[adId] || false;
 
+  // Toggle hook expansion
+  const toggleHookExpansion = (creativeId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedHooks(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(creativeId)) {
+        newSet.delete(creativeId);
+      } else {
+        newSet.add(creativeId);
+      }
+      return newSet;
+    });
+  };
+
+  // Column resize handler
+  const handleResizeStart = (columnKey: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    setResizing(columnKey);
+    setStartX(e.clientX);
+    setStartWidth(columnWidths[columnKey as keyof typeof columnWidths]);
+  };
+
+  // Creative handlers
+  const handleSendToBriefBuilder = (creative: Creative) => {
+    window.location.href = `/build-ai?creativeId=${creative.id}`;
+    localStorage.setItem('selectedCreative', JSON.stringify(creative));
+  };
+
+  const handleViewDetails = (creative: Creative) => {
+    window.location.href = `/ads/${encodeURIComponent(creative.id)}/details`;
+  };
+
   // Set default account when modal opens
   useEffect(() => {
     if (selectedAccountId && !formData.accountId) {
@@ -310,7 +568,7 @@ export default function Dashboard() {
   const handleGenerateReport = async (formValues: typeof formData) => {
     setGenerating(true);
     try {
-      console.log("🚀 Generating report with data:", formValues);
+      console.log("🚀 Starting analysis with data:", formValues);
       
       // Build query parameters
       const params = new URLSearchParams({
@@ -336,7 +594,7 @@ export default function Dashboard() {
       
       const result = await response.json();
       console.log("✅ Webhook response:", result);
-      console.log("✅ Report generation started");
+      console.log("✅ Analysis started");
       
       setModalOpen(false);
       
@@ -345,8 +603,8 @@ export default function Dashboard() {
         await refreshReports(selectedAccountId, false);
       }
     } catch (error) {
-      console.error("❌ Failed to start report generation:", error);
-      alert("Failed to generate report. Please try again.");
+      console.error("❌ Failed to start analysis:", error);
+      alert("Failed to start analysis. Please try again.");
     } finally {
       setGenerating(false);
     }
@@ -371,6 +629,13 @@ export default function Dashboard() {
     setModalOpen(true);
   };
 
+  // Filter creatives based on search query
+  const filteredCreatives = allCreatives.filter(creative =>
+    searchQuery === "" || 
+    creative.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    creative.hook.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   if (dashboardLoading) {
     return (
       <AppLayout>
@@ -386,7 +651,7 @@ export default function Dashboard() {
 
   return (
     <AppLayout>
-      <div className="p-6">
+      <div className="p-6 max-w-[1600px] mx-auto">
         {!selectedAccountId ? (
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="text-center">
@@ -406,11 +671,51 @@ export default function Dashboard() {
                   <div>
                     <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
                     <p className="text-muted-foreground text-lg">
-                      Top performing creatives and audit reports
+                    Account analysis and top performing creatives
                     </p>
                   </div>
                 </div>
               </div>
+
+            {/* Analysis Progress Section */}
+            {showProgressSection ? (
+              <div className="mb-8">
+                <AnalysisProgressStepper 
+                  currentStatus={latestReport.status as 'processing initiated' | 'ad analysis complete' | 'ad blocks created' | 'summary created' | 'complete'}
+                  reportId={latestReport.id}
+                  createdAt={latestReport.created_at}
+                />
+              </div>
+            ) : !latestReport ? (
+              <Card className="shadow-card mb-8 border-dashed border-2">
+                <CardContent className="p-12 text-center">
+                  <Sparkles className="h-16 w-16 text-primary mx-auto mb-4" />
+                  <h3 className="text-2xl font-semibold text-foreground mb-2">Start Your Analysis</h3>
+                  <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                    Begin analyzing your ad account performance to get insights on your top performing creatives, 
+                    psychological triggers, and optimization recommendations.
+                  </p>
+                  <Button 
+                    className="bg-gradient-primary hover:opacity-90 transition-opacity gap-2"
+                    onClick={handleOpenModal}
+                    disabled={generating}
+                    size="lg"
+                  >
+                    {generating ? (
+                      <>
+                        <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Starting...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-5 w-5" />
+                        Start Analysis
+                      </>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : null}
 
               {/* Top Creatives Section */}
               <div className="mb-12">
@@ -424,9 +729,6 @@ export default function Dashboard() {
                       </div>
                     )}
                   </div>
-                  <Button variant="outline" className="gap-2">
-                    View All
-                  </Button>
                 </div>
 
                 {adsLoading ? (
@@ -448,7 +750,7 @@ export default function Dashboard() {
                   </Card>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-                    {topAds.map((ad) => (
+                   {getDisplayedTopCreatives().map((ad) => (
                       <Card 
                         key={ad.id} 
                         className="shadow-card hover:shadow-floating transition-all duration-300 hover:scale-[1.02] group cursor-pointer overflow-hidden border border-border hover:border-primary/50 bg-gradient-to-br from-card to-card/80"
@@ -647,43 +949,555 @@ export default function Dashboard() {
                 )}
               </div>
 
-              {/* Audit Reports Section */}
+            {/* All Creatives Section with Tabs */}
               <div>
                 <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <h2 className="text-2xl font-semibold text-foreground">Audit Reports</h2>
-                    {refreshing && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                        <span>Refreshing...</span>
+                <h2 className="text-2xl font-semibold text-foreground">All Creatives</h2>
                       </div>
+
+              <Tabs defaultValue="creatives" className="w-full">
+                <TabsList className="grid w-full max-w-md grid-cols-2">
+                  <TabsTrigger value="creatives">
+                    <Play className="h-4 w-4 mr-2" />
+                    Creatives ({allCreatives.length})
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="summary" 
+                    disabled={!auditSummary && !summaryLoading}
+                  >
+                    <Brain className="h-4 w-4 mr-2" />
+                    Summary
+                    {!auditSummary && !summaryLoading && (
+                      <Badge variant="outline" className="ml-2 text-[10px]">Stage 4+</Badge>
                     )}
+                  </TabsTrigger>
+                </TabsList>
+
+                {/* Creatives Tab */}
+                <TabsContent value="creatives" className="mt-6">
+                  <Card className="shadow-card overflow-hidden">
+                    <div className="p-6">
+                      <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-xl font-semibold text-foreground">
+                          All Creatives ({filteredCreatives.length})
+                        </h3>
+                        <div className="flex gap-4">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                            <Input
+                              placeholder="Search creatives..."
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                              className="pl-10 w-64"
+                            />
                   </div>
-                  <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-                    <DialogTrigger asChild>
+                          <Button onClick={() => loadAllCreatives(selectedAccountId)} variant="outline">
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            Refresh
+                          </Button>
+                        </div>
+                      </div>
+
+                      {creativesLoading ? (
+                        <div className="text-center py-12">
+                          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                          <p className="text-muted-foreground">Loading creatives...</p>
+                        </div>
+                      ) : filteredCreatives.length === 0 ? (
+                        <div className="text-center py-12">
+                          <Play className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                          <p className="text-muted-foreground">No creatives found</p>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Desktop Table View */}
+                          <div className="hidden lg:block overflow-x-auto">
+                            <div className="min-w-full inline-block align-middle">
+                              <Table className="w-full table-fixed">
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead style={{ width: `${columnWidths.select}px` }} className="relative group">
+                                      <div className="flex items-center justify-center">
+                                        <span className="text-xs font-semibold">Top 5</span>
+                                      </div>
+                                    </TableHead>
+                                    <TableHead style={{ width: `${columnWidths.icon}px` }} className="relative group">
+                                      <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 group-hover:bg-primary/30"
+                                        onMouseDown={(e) => handleResizeStart('icon', e)}
+                                      />
+                                    </TableHead>
+                                    <TableHead style={{ width: `${columnWidths.name}px` }} className="relative group">
+                                      Name
+                                      <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 group-hover:bg-primary/30"
+                                        onMouseDown={(e) => handleResizeStart('name', e)}
+                                      />
+                                    </TableHead>
+                                    <TableHead style={{ width: `${columnWidths.hook}px` }} className="relative group">
+                                      Hook
+                                      <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 group-hover:bg-primary/30"
+                                        onMouseDown={(e) => handleResizeStart('hook', e)}
+                                      />
+                                    </TableHead>
+                                    <TableHead style={{ width: `${columnWidths.type}px` }} className="relative group">
+                                      Type
+                                      <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 group-hover:bg-primary/30"
+                                        onMouseDown={(e) => handleResizeStart('type', e)}
+                                      />
+                                    </TableHead>
+                                    <TableHead style={{ width: `${columnWidths.spend}px` }} className="relative group">
+                                      Spend
+                                      <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 group-hover:bg-primary/30"
+                                        onMouseDown={(e) => handleResizeStart('spend', e)}
+                                      />
+                                    </TableHead>
+                                    <TableHead style={{ width: `${columnWidths.roas}px` }} className="relative group">
+                                      ROAS
+                                      <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 group-hover:bg-primary/30"
+                                        onMouseDown={(e) => handleResizeStart('roas', e)}
+                                      />
+                                    </TableHead>
+                                    <TableHead style={{ width: `${columnWidths.views}px` }} className="relative group">
+                                      Views
+                                      <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 group-hover:bg-primary/30"
+                                        onMouseDown={(e) => handleResizeStart('views', e)}
+                                      />
+                                    </TableHead>
+                                    <TableHead style={{ width: `${columnWidths.thumbstop}px` }} className="relative group">
+                                      Thumbstop
+                                      <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 group-hover:bg-primary/30"
+                                        onMouseDown={(e) => handleResizeStart('thumbstop', e)}
+                                      />
+                                    </TableHead>
+                                    <TableHead style={{ width: `${columnWidths.holdRate}px` }} className="relative group">
+                                      Hold Rate
+                                      <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 group-hover:bg-primary/30"
+                                        onMouseDown={(e) => handleResizeStart('holdRate', e)}
+                                      />
+                                    </TableHead>
+                                    <TableHead style={{ width: `${columnWidths.ctr}px` }} className="relative group">
+                                      CTR
+                                      <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 group-hover:bg-primary/30"
+                                        onMouseDown={(e) => handleResizeStart('ctr', e)}
+                                      />
+                                    </TableHead>
+                                    <TableHead style={{ width: `${columnWidths.actions}px` }} className="relative group">
+                                      Actions
+                                    </TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {filteredCreatives.map((creative) => {
+                                    const isHookExpanded = expandedHooks.has(creative.id);
+                                    const hookText = creative.hook;
+                                    const isLongHook = hookText.length > 100;
+                                    const isSelected = selectedCreativeIds.has(creative.id);
+                                    
+                                    return (
+                                      <TableRow 
+                                        key={creative.id} 
+                                        className={`cursor-pointer hover:bg-muted/50 transition-colors h-20 ${
+                                          isSelected ? 'bg-primary/5 border-l-4 border-l-primary' : ''
+                                        }`}
+                                        onClick={() => handleViewDetails(creative)}
+                                      >
+                                        <TableCell className="align-middle overflow-hidden" style={{ width: `${columnWidths.select}px` }}>
+                                          <div className="flex items-center justify-center">
+                                            <input
+                                              type="checkbox"
+                                              checked={isSelected}
+                                              onChange={() => toggleCreativeSelection(creative.id)}
+                                              onClick={(e) => e.stopPropagation()}
+                                              disabled={!isSelected && selectedCreativeIds.size >= 5}
+                                              className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                              title={!isSelected && selectedCreativeIds.size >= 5 ? "Maximum 5 creatives can be selected" : "Select for Top Creatives"}
+                                            />
+                                          </div>
+                                        </TableCell>
+                                        <TableCell className="align-middle overflow-hidden" style={{ width: `${columnWidths.icon}px` }}>
+                                          <div className="w-10 h-10 rounded bg-muted flex items-center justify-center">
+                                            {creative.ad_type === 'video' ? (
+                                              <Play className="w-5 h-5 text-primary" />
+                                            ) : (
+                                              <ImageIcon className="w-5 h-5 text-primary" />
+                                            )}
+                                          </div>
+                                        </TableCell>
+                                        <TableCell className="align-middle overflow-hidden" style={{ width: `${columnWidths.name}px` }}>
+                                          <div className="font-medium text-foreground truncate flex items-center gap-2">
+                                            {creative.name}
+                                            <ExternalLink className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                                          </div>
+                                        </TableCell>
+                                        <TableCell className="align-middle overflow-hidden" style={{ width: `${columnWidths.hook}px` }}>
+                                          <div className="py-2">
+                                            <div className={`text-sm text-muted-foreground leading-relaxed ${!isHookExpanded ? 'line-clamp-2' : ''}`}>
+                                              {hookText}
+                                            </div>
+                                            {isLongHook && (
+                                              <button
+                                                onClick={(e) => toggleHookExpansion(creative.id, e)}
+                                                className="text-xs text-primary hover:text-primary/80 font-medium mt-1 hover:underline"
+                                              >
+                                                {isHookExpanded ? 'Show less' : 'Read more'}
+                                              </button>
+                                            )}
+                                          </div>
+                                        </TableCell>
+                                        <TableCell className="align-middle overflow-hidden" style={{ width: `${columnWidths.type}px` }}>
+                                          <Badge variant="outline" className="capitalize">
+                                            {creative.ad_type}
+                                          </Badge>
+                                        </TableCell>
+                                        <TableCell className="align-middle overflow-hidden" style={{ width: `${columnWidths.spend}px` }}>
+                                          <div className="flex items-center gap-1 text-sm">
+                                            <DollarSign className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                                            <span className="truncate">{formatCurrency(creative.spend)}</span>
+                                          </div>
+                                        </TableCell>
+                                        <TableCell className="align-middle overflow-hidden" style={{ width: `${columnWidths.roas}px` }}>
+                                          <Badge className={
+                                            creative.roas >= 2.5 ? 'bg-green-500/10 text-green-600' :
+                                            creative.roas >= 2 ? 'bg-blue-500/10 text-blue-600' :
+                                            'bg-yellow-500/10 text-yellow-600'
+                                          }>
+                                            {creative.roas.toFixed(2)}x
+                                          </Badge>
+                                        </TableCell>
+                                        <TableCell className="align-middle overflow-hidden" style={{ width: `${columnWidths.views}px` }}>
+                                          <div className="flex items-center gap-1 text-sm">
+                                            <Eye className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                                            <span className="truncate">{formatNumber(creative.total_views)}</span>
+                                          </div>
+                                        </TableCell>
+                                        <TableCell className="align-middle overflow-hidden" style={{ width: `${columnWidths.thumbstop}px` }}>
+                                          {creative.thumbstop !== null ? (
+                                            <span className="text-sm">{creative.thumbstop.toFixed(1)}%</span>
+                                          ) : (
+                                            <span className="text-sm text-muted-foreground">-</span>
+                                          )}
+                                        </TableCell>
+                                        <TableCell className="align-middle overflow-hidden" style={{ width: `${columnWidths.holdRate}px` }}>
+                                          {creative.hold_rate !== null ? (
+                                            <span className="text-sm">{creative.hold_rate.toFixed(1)}%</span>
+                                          ) : (
+                                            <span className="text-sm text-muted-foreground">-</span>
+                                          )}
+                                        </TableCell>
+                                        <TableCell className="align-middle overflow-hidden" style={{ width: `${columnWidths.ctr}px` }}>
+                                          <span className="text-sm">{creative.ctr.toFixed(1)}%</span>
+                                        </TableCell>
+                                        <TableCell className="align-middle overflow-hidden" style={{ width: `${columnWidths.actions}px` }}>
+                                          <div className="flex gap-2">
                       <Button 
-                        className="bg-gradient-primary hover:opacity-90 transition-opacity gap-2"
-                        onClick={handleOpenModal}
-                        disabled={generating}
-                      >
-                        {generating ? (
-                          <>
-                            <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            Generating...
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="h-4 w-4" />
-                            Generate Report
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleViewDetails(creative);
+                                              }}
+                                              className="whitespace-nowrap"
+                                            >
+                                              <ExternalLink className="w-3 h-3 mr-1" />
+                                              View
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleSendToBriefBuilder(creative);
+                                              }}
+                                              className="bg-primary hover:bg-primary/90 text-white whitespace-nowrap"
+                                            >
+                                              <Send className="w-3 h-3 mr-1" />
+                                              Brief
+                                            </Button>
+                                          </div>
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </div>
+
+                          {/* Mobile Card View */}
+                          <div className="lg:hidden space-y-4">
+                            {filteredCreatives.map((creative) => {
+                              const isSelected = selectedCreativeIds.has(creative.id);
+                              
+                              return (
+                                <Card 
+                                  key={creative.id} 
+                                  className={`p-4 cursor-pointer hover:shadow-lg transition-all ${
+                                    isSelected ? 'border-2 border-primary bg-primary/5' : ''
+                                  }`}
+                                  onClick={() => handleViewDetails(creative)}
+                                >
+                                  <div className="flex items-start gap-3">
+                                    <div className="flex flex-col items-center gap-2">
+                                      <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={() => toggleCreativeSelection(creative.id)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        disabled={!isSelected && selectedCreativeIds.size >= 5}
+                                        className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title={!isSelected && selectedCreativeIds.size >= 5 ? "Maximum 5 creatives can be selected" : "Select for Top Creatives"}
+                                      />
+                                      <div className="w-12 h-12 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                                        {creative.ad_type === 'video' ? (
+                                          <Play className="w-6 h-6 text-primary" />
+                                        ) : (
+                                          <ImageIcon className="w-6 h-6 text-primary" />
+                                        )}
+                                      </div>
+                                    </div>
+                                  
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-start justify-between gap-2 mb-2">
+                                      <h3 className="font-medium text-foreground text-sm line-clamp-2">
+                                        {creative.name}
+                                      </h3>
+                                      <Badge variant="outline" className="capitalize flex-shrink-0">
+                                        {creative.ad_type}
+                                      </Badge>
+                                    </div>
+                                    
+                                    <p className="text-xs text-muted-foreground line-clamp-2 mb-3">
+                                      {creative.hook}
+                                    </p>
+                                    
+                                    <div className="grid grid-cols-2 gap-2 mb-3">
+                                      <div className="flex items-center gap-1">
+                                        <DollarSign className="w-3 h-3 text-muted-foreground" />
+                                        <span className="text-xs font-medium">{formatCurrency(creative.spend)}</span>
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                        <Badge className={
+                                          creative.roas >= 2.5 ? 'bg-green-500/10 text-green-600' :
+                                          creative.roas >= 2 ? 'bg-blue-500/10 text-blue-600' :
+                                          'bg-yellow-500/10 text-yellow-600'
+                                        }>
+                                          {creative.roas.toFixed(2)}x ROAS
+                                        </Badge>
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                        <Eye className="w-3 h-3 text-muted-foreground" />
+                                        <span className="text-xs">{formatNumber(creative.total_views)} views</span>
+                                      </div>
+                                      <div className="text-xs">
+                                        <span className="text-muted-foreground">CTR: </span>
+                                        <span className="font-medium">{creative.ctr.toFixed(1)}%</span>
+                                      </div>
+                                    </div>
+                                    
+                                    {creative.ad_type === 'video' && (
+                                      <div className="grid grid-cols-2 gap-2 mb-3 text-xs">
+                                        <div>
+                                          <span className="text-muted-foreground">Thumbstop: </span>
+                                          <span className="font-medium">
+                                            {creative.thumbstop !== null ? `${creative.thumbstop.toFixed(1)}%` : '-'}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="text-muted-foreground">Hold Rate: </span>
+                                          <span className="font-medium">
+                                            {creative.hold_rate !== null ? `${creative.hold_rate.toFixed(1)}%` : '-'}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    )}
+                                    
+                                    <div className="flex gap-2">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleViewDetails(creative);
+                                        }}
+                                        className="flex-1"
+                                      >
+                                        <ExternalLink className="w-3 h-3 mr-1" />
+                                        View Details
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleSendToBriefBuilder(creative);
+                                        }}
+                                        className="bg-primary hover:bg-primary/90 text-white flex-1"
+                                      >
+                                        <Send className="w-3 h-3 mr-1" />
+                                        Brief
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </Card>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </Card>
+                </TabsContent>
+
+                {/* Summary Tab */}
+                <TabsContent value="summary" className="mt-6">
+                  {summaryLoading ? (
+                    <Card className="shadow-card">
+                      <CardContent className="p-12 text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                        <p className="text-muted-foreground">Loading summary...</p>
+                      </CardContent>
+                    </Card>
+                  ) : !auditSummary ? (
+                    <Card className="shadow-card">
+                      <CardContent className="p-12 text-center">
+                        <Brain className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                        <h3 className="text-lg font-semibold text-foreground mb-2">Summary Not Available</h3>
+                        <p className="text-muted-foreground">
+                          The audit summary will be available once the analysis reaches the &quot;Summary Created&quot; stage.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div>
+                      <div className="mb-6">
+                        <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
+                          <Brain className="h-5 w-5 text-primary" />
+                          Analysis & Insights
+                        </h2>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <Card className="shadow-card">
+                          <CardHeader>
+                            <CardTitle className="text-base font-semibold flex items-center gap-2">
+                              <Brain className="h-4 w-4 text-primary" />
+                              Psychological Triggers
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <p className="text-sm text-foreground/90 leading-relaxed">{auditSummary.psychological_triggers}</p>
+                          </CardContent>
+                        </Card>
+
+                        <Card className="shadow-card">
+                          <CardHeader>
+                            <CardTitle className="text-base font-semibold flex items-center gap-2">
+                              <Target className="h-4 w-4 text-red-500" />
+                              Pain Points
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <p className="text-sm text-foreground/90 leading-relaxed">{auditSummary.paint_points}</p>
+                          </CardContent>
+                        </Card>
+
+                        <Card className="shadow-card">
+                          <CardHeader>
+                            <CardTitle className="text-base font-semibold flex items-center gap-2">
+                              <Users className="h-4 w-4 text-blue-500" />
+                              Tonality
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <p className="text-sm text-foreground/90 leading-relaxed">{auditSummary.tonality}</p>
+                          </CardContent>
+                        </Card>
+
+                        <Card className="shadow-card">
+                          <CardHeader>
+                            <CardTitle className="text-base font-semibold flex items-center gap-2">
+                              <Eye className="h-4 w-4 text-primary" />
+                              Visuals
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <p className="text-sm text-foreground/90 leading-relaxed">{auditSummary.visuals}</p>
+                          </CardContent>
+                        </Card>
+
+                        <Card className="shadow-card">
+                          <CardHeader>
+                            <CardTitle className="text-base font-semibold flex items-center gap-2">
+                              <TrendingUp className="h-4 w-4 text-green-500" />
+                              Market Awareness
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <p className="text-sm text-foreground/90 leading-relaxed">{auditSummary.market_awareness}</p>
+                          </CardContent>
+                        </Card>
+
+                        <Card className="shadow-card">
+                          <CardHeader>
+                            <CardTitle className="text-base font-semibold flex items-center gap-2">
+                              <Target className="h-4 w-4 text-primary" />
+                              Angle
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <p className="text-sm text-foreground/90 leading-relaxed">{auditSummary.angle}</p>
+                          </CardContent>
+                        </Card>
+
+                        <Card className="shadow-card">
+                          <CardHeader>
+                            <CardTitle className="text-base font-semibold flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-blue-500" />
+                              Format
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <p className="text-sm text-foreground/90 leading-relaxed">{auditSummary.format}</p>
+                          </CardContent>
+                        </Card>
+
+                        <Card className="shadow-card">
+                          <CardHeader>
+                            <CardTitle className="text-base font-semibold flex items-center gap-2">
+                              <BarChart3 className="h-4 w-4 text-primary" />
+                              Theme
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <p className="text-sm text-foreground/90 leading-relaxed">{auditSummary.theme}</p>
+                          </CardContent>
+                        </Card>
+
+                        <Card className="shadow-card md:col-span-2">
+                          <CardHeader>
+                            <CardTitle className="text-base font-semibold flex items-center gap-2">
+                              <TrendingUp className="h-4 w-4 text-green-500" />
+                              Recommendations
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <p className="text-sm text-foreground/90 leading-relaxed">{auditSummary.recomendations}</p>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </div>
                           </>
                         )}
-                      </Button>
-                    </DialogTrigger>
+
+        {/* Analysis Modal */}
+        <Dialog open={modalOpen} onOpenChange={setModalOpen}>
                     <DialogContent className="sm:max-w-[425px]">
                       <DialogHeader>
-                        <DialogTitle>Generate New Audit Report</DialogTitle>
+              <DialogTitle>Start New Analysis</DialogTitle>
                         <DialogDescription>
-                          Configure the parameters for your new audit report.
+                Configure the parameters for your account analysis.
                         </DialogDescription>
                       </DialogHeader>
                       <form onSubmit={handleSubmitForm} className="space-y-4">
@@ -765,90 +1579,19 @@ export default function Dashboard() {
                             {generating ? (
                               <>
                                 <div className="h-4 w-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                Generating...
+                      Starting...
                               </>
                             ) : (
-                              'Generate Report'
+                    <>
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Start Analysis
+                    </>
                             )}
                           </Button>
                         </DialogFooter>
                       </form>
                     </DialogContent>
                   </Dialog>
-                </div>
-
-                {reports.length === 0 ? (
-                  <Card className="shadow-card">
-                    <CardContent className="p-12 text-center">
-                      <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold text-foreground mb-2">No Audit Reports Generated Yet</h3>
-                      <p className="text-muted-foreground mb-6">Generate your first audit report to analyze ad performance.</p>
-                      <Button 
-                        className="bg-gradient-primary hover:opacity-90 transition-opacity gap-2"
-                        onClick={handleOpenModal}
-                        disabled={generating}
-                      >
-                        {generating ? (
-                          <>
-                            <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            Generating...
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="h-4 w-4" />
-                            Generate Report
-                          </>
-                        )}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="space-y-4">
-                    {reports.map((report) => (
-                      <Card 
-                        key={report.id} 
-                        className="shadow-card hover:shadow-elevated transition-all duration-200 group"
-                      >
-                        <CardHeader className="pb-4">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <CardTitle className="text-lg group-hover:text-primary transition-colors">
-                                Report #{report.id}
-                              </CardTitle>
-                              <div className="flex items-center gap-4 mt-2">
-                                <div className="flex items-center gap-1 text-muted-foreground">
-                                  <Calendar className="h-4 w-4" />
-                                  <span className="text-sm">{formatDateRange(report.from_date, report.to_date)}</span>
-                                </div>
-                                <Badge className={getStatusColor(report.status)}>
-                                  {report.status}
-                                </Badge>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm text-muted-foreground">Created</p>
-                              <p className="font-medium">{formatDate(report.created_at)}</p>
-                            </div>
-                          </div>
-                        </CardHeader>
-
-                        <CardContent>
-                          <Button 
-                            className="bg-gradient-primary hover:opacity-90 transition-opacity cursor-pointer"
-                            onClick={() => window.location.href = `/reports/${report.id}`}
-                            disabled={report.status === 'processing'}
-                          >
-                            <Play className="h-4 w-4 mr-2" />
-                            {report.status === 'processing' ? 'Processing...' : 'View Report Details'}
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </div>
-          </>
-        )}
     </div>
     </AppLayout>
   );

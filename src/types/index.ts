@@ -18,7 +18,7 @@ export interface AuditReport {
   from_date: string;
   to_date: string;
   created_at: string;
-  status: 'completed' | 'processing' | 'failed';
+  status: 'processing initiated' | 'ad analysis complete' | 'ad blocks created' | 'summary created' | 'complete' | 'processing' | 'failed';
 }
 
 export interface Ad {
@@ -322,4 +322,18 @@ export interface ClientAccess {
   workflowId: string;
   password: string;
   expiresAt?: string;
+}
+
+export interface Brief {
+  id: number;
+  account_id: string;
+  name: string;
+  market_awareness: string;
+  angle: string;
+  format: string;
+  theme: string;
+  status: 'In Editing' | 'Briefed' | 'Ready to Launch' | 'Launched' | 'Iterating';
+  assigned_to: string;
+  created_at: string;
+  avatar: string;
 }

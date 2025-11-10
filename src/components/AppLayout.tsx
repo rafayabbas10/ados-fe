@@ -22,14 +22,15 @@ import {
   Building2,
   ChevronDown,
   Menu,
-  ChevronLeft
+  ChevronLeft,
+  FileText
 } from "lucide-react";
 
 const navigationItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "All Creatives", url: "/creatives", icon: Play },
   { title: "Research", url: "/research", icon: Microscope },
   { title: "Brief Builder", url: "/build-ai", icon: Sparkles },
+  { title: "All Briefs", url: "/briefs", icon: FileText },
   { title: "Workflow", url: "/workflow", icon: Kanban },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
