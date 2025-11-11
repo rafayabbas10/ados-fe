@@ -190,23 +190,36 @@ export const updateAdAccountName = async (
 };
 
 // Delete an ad account
-export const deleteAdAccount = async (accountId: string): Promise<void> => {
+export const deleteAdAccount = async (accountId: string): Promise<{ success: boolean; message?: string; data?: unknown }> => {
   try {
     console.log("🔄 Deleting ad account:", accountId);
     
-    // TODO: Replace with actual API endpoint
-    const response = await fetch(`${WEBHOOK_URL}/delete-account/${accountId}`, {
-      method: 'DELETE',
+    const DELETE_ACCOUNT_WEBHOOK = "https://n8n.srv931040.hstgr.cloud/webhook/delete-ad-account";
+    
+    const response = await fetch(DELETE_ACCOUNT_WEBHOOK, {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
+      body: JSON.stringify([{ id: accountId }]),
+      mode: 'cors',
     });
     
+    console.log("📊 Response status:", response.status);
+    
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
     }
     
-    console.log("✅ Account deleted successfully");
+    const data = await response.json();
+    console.log("✅ Account deleted successfully:", data);
+    
+    // Check if the response indicates successful deletion
+    if (Array.isArray(data) && data.length > 0 && data[0].is_deleted) {
+      return { success: true, data };
+    }
+    
+    return { success: true, data };
   } catch (error) {
     console.error("❌ Error deleting ad account:", error);
     throw error;

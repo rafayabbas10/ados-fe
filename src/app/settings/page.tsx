@@ -107,55 +107,97 @@ export default function SettingsPage() {
   };
 
   const toggleAccountSelection = (accountId: string) => {
-    const newSelected = new Set(selectedAccounts);
-    if (newSelected.has(accountId)) {
-      newSelected.delete(accountId);
+    // Only allow one account selection at a time
+    if (selectedAccounts.has(accountId)) {
+      // If clicking the same account, deselect it
+      setSelectedAccounts(new Set());
     } else {
-      newSelected.add(accountId);
+      // Select only this account (replace any previous selection)
+      setSelectedAccounts(new Set([accountId]));
     }
-    setSelectedAccounts(newSelected);
-  };
-
-  const selectAllAccounts = () => {
-    const allIds = new Set(availableAccounts.map(acc => acc.id));
-    setSelectedAccounts(allIds);
-  };
-
-  const deselectAllAccounts = () => {
-    setSelectedAccounts(new Set());
   };
 
   const handleAddSelectedAccounts = async () => {
     if (selectedAccounts.size === 0) {
-      setError("Please select at least one account to add");
+      setError("Please select an account to add");
       return;
     }
 
     setIsSubmitting(true);
     setError(null);
     
-    const loadingToast = toast.loading('Adding accounts...');
+    const loadingToast = toast.loading('Adding account...');
     
     try {
       const accountIds = Array.from(selectedAccounts);
       await addAdAccounts(accountIds);
+      
+      // Get the added account ID for analysis
+      const addedAccountId = accountIds[0];
       
       setSelectedAccounts(new Set());
       setIsAddDialogOpen(false);
       
       await refreshAccounts();
       
-      const message = selectedAccounts.size === 1 
-        ? "Account added successfully!" 
-        : `${selectedAccounts.size} accounts added successfully!`;
-      
-      toast.success(message, {
+      toast.success("Account added successfully!", {
         id: loadingToast,
         duration: 3000,
       });
+
+      // Auto-trigger analysis for the newly added account
+      toast.loading('Starting automatic analysis for past 30 days...', {
+        duration: 2000,
+      });
+
+      try {
+        // Calculate date range (past 30 days)
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - 30);
+
+        const formatDate = (date: Date) => {
+          return date.toISOString().split('T')[0]; // YYYY-MM-DD format
+        };
+
+        // Build query parameters for analysis
+        const params = new URLSearchParams({
+          accountId: addedAccountId,
+          startDate: formatDate(startDate),
+          endDate: formatDate(endDate),
+          topAdsCount: '20'
+        });
+
+        // Call the analysis webhook
+        const webhookUrl = `https://n8n.srv931040.hstgr.cloud/webhook/18a6d4cf-023f-46da-afe0-5d4c4f4bae72?${params.toString()}`;
+        
+        const analysisResponse = await fetch(webhookUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (analysisResponse.ok) {
+          console.log("✅ Analysis started for account:", addedAccountId);
+          toast.success("Analysis started! Processing top 20 ads from the past 30 days.", {
+            duration: 5000,
+          });
+        } else {
+          console.error("⚠️ Analysis webhook returned error:", analysisResponse.status);
+          toast.info("Account added, but automatic analysis could not be started. You can start it manually from the dashboard.", {
+            duration: 6000,
+          });
+        }
+      } catch (analysisError) {
+        console.error("❌ Failed to start automatic analysis:", analysisError);
+        toast.info("Account added successfully! You can start the analysis from the dashboard.", {
+          duration: 5000,
+        });
+      }
     } catch (error) {
       console.error("Error adding accounts:", error);
-      const errorMessage = error instanceof Error ? error.message : "Failed to add accounts";
+      const errorMessage = error instanceof Error ? error.message : "Failed to add account";
       setError(errorMessage);
       
       toast.error(errorMessage, {
@@ -205,8 +247,8 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDeleteAccount = async (accountId: string) => {
-    if (!confirm("Are you sure you want to delete this account? This action cannot be undone.")) {
+  const handleDeleteAccount = async (accountId: string, accountName: string) => {
+    if (!confirm(`Are you sure you want to delete "${accountName}"? This action cannot be undone and will remove all associated data.`)) {
       return;
     }
     
@@ -215,13 +257,18 @@ export default function SettingsPage() {
     const loadingToast = toast.loading('Deleting account...');
     
     try {
-      await deleteAdAccount(accountId);
-      await refreshAccounts();
+      const result = await deleteAdAccount(accountId);
       
-      toast.success("Account deleted successfully!", {
-        id: loadingToast,
-        duration: 3000,
-      });
+      if (result.success) {
+        await refreshAccounts();
+        
+        toast.success(`Account "${accountName}" deleted successfully!`, {
+          id: loadingToast,
+          duration: 3000,
+        });
+      } else {
+        throw new Error("Failed to delete account");
+      }
     } catch (error) {
       console.error("Error deleting account:", error);
       const errorMessage = error instanceof Error ? error.message : "Failed to delete account";
@@ -446,9 +493,9 @@ export default function SettingsPage() {
                       </DialogTrigger>
                       <DialogContent className="sm:max-w-[600px]">
                         <DialogHeader>
-                          <DialogTitle>Add Ad Accounts</DialogTitle>
+                          <DialogTitle>Add Ad Account</DialogTitle>
                           <DialogDescription>
-                            Select accounts from your Meta Business Manager to add to adOS
+                            Select one account from your Meta Business Manager to add to adOS. Analysis will automatically start for the past 30 days.
                           </DialogDescription>
                         </DialogHeader>
                         
@@ -482,32 +529,10 @@ export default function SettingsPage() {
                             </div>
                           ) : (
                             <>
-                              <div className="mb-4 flex items-center justify-between">
+                              <div className="mb-4">
                                 <p className="text-sm text-muted-foreground">
-                                  Found {availableAccounts.length} account{availableAccounts.length !== 1 ? 's' : ''} available to add
+                                  Found {availableAccounts.length} account{availableAccounts.length !== 1 ? 's' : ''} available to add (select one at a time)
                                 </p>
-                                <div className="flex gap-2">
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={selectAllAccounts}
-                                    className="text-xs"
-                                  >
-                                    Select All
-                                  </Button>
-                                  {selectedAccounts.size > 0 && (
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={deselectAllAccounts}
-                                      className="text-xs"
-                                    >
-                                      Deselect All
-                                    </Button>
-                                  )}
-                                </div>
                               </div>
                               
                               <div className="border rounded-lg divide-y max-h-[400px] overflow-y-auto">
@@ -522,10 +547,10 @@ export default function SettingsPage() {
                                     <div className="flex items-start gap-3">
                                       <div className="pt-1">
                                         <input
-                                          type="checkbox"
+                                          type="radio"
                                           checked={selectedAccounts.has(account.id)}
                                           onChange={() => toggleAccountSelection(account.id)}
-                                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                                          className="h-4 w-4 border-gray-300 text-primary focus:ring-primary cursor-pointer"
                                           onClick={(e) => e.stopPropagation()}
                                         />
                                       </div>
@@ -569,7 +594,7 @@ export default function SettingsPage() {
                               {selectedAccounts.size > 0 && (
                                 <div className="mt-4 p-3 bg-primary/10 rounded-lg">
                                   <p className="text-sm text-foreground">
-                                    <strong>{selectedAccounts.size}</strong> account{selectedAccounts.size !== 1 ? 's' : ''} selected
+                                    <strong>1</strong> account selected
                                   </p>
                                 </div>
                               )}
@@ -593,7 +618,7 @@ export default function SettingsPage() {
                             >
                               {isSubmitting 
                                 ? "Adding..." 
-                                : `Add ${selectedAccounts.size > 0 ? selectedAccounts.size : ''} Account${selectedAccounts.size !== 1 ? 's' : ''}`}
+                                : "Add Account"}
                             </Button>
                           )}
                         </DialogFooter>
@@ -685,7 +710,7 @@ export default function SettingsPage() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => handleDeleteAccount(account.id)}
+                                    onClick={() => handleDeleteAccount(account.facebook_account_id, account.account_name)}
                                     className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
                                   >
                                     <Trash2 className="h-4 w-4" />
