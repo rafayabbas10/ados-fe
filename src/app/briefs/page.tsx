@@ -21,12 +21,11 @@ import {
   RefreshCw,
   Calendar,
   User,
-  TrendingUp,
-  Eye,
-  Users
+  Eye
 } from "lucide-react";
 import { Brief } from "@/types";
 import { fetchBriefsByAccountId } from "@/services/briefsService";
+import { BriefSidebar } from "@/components/BriefSidebar";
 
 export default function AllBriefs() {
   const { selectedAccountId } = useAccount();
@@ -282,117 +281,12 @@ export default function AllBriefs() {
           </div>
         </Card>
 
-        {/* Brief Details Modal */}
-        {selectedBrief && (
-          <div 
-            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-            onClick={() => setSelectedBrief(null)}
-          >
-            <Card 
-              className="max-w-3xl w-full max-h-[80vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="text-sm font-medium text-muted-foreground">Brief #{selectedBrief.id}</span>
-                      <Badge className={getStatusColor(selectedBrief.status)}>
-                        {selectedBrief.status}
-                      </Badge>
-                    </div>
-                    <CardTitle className="text-2xl">
-                      {selectedBrief.name || <span className="text-muted-foreground italic">Untitled Brief</span>}
-                    </CardTitle>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSelectedBrief(null)}
-                  >
-                    ✕
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Metadata */}
-                <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Assigned To</p>
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">
-                        {selectedBrief.assigned_to || <span className="text-muted-foreground italic">Unassigned</span>}
-                      </span>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Created</p>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">{formatDate(selectedBrief.created_at)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Market Awareness */}
-                {selectedBrief.market_awareness && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <TrendingUp className="h-5 w-5 text-primary" />
-                      <h3 className="font-semibold text-lg">Market Awareness</h3>
-                    </div>
-                    <p className="text-foreground/90 leading-relaxed">{selectedBrief.market_awareness}</p>
-                  </div>
-                )}
-
-                {/* Angle */}
-                {selectedBrief.angle && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <TrendingUp className="h-5 w-5 text-blue-500" />
-                      <h3 className="font-semibold text-lg">Angle</h3>
-                    </div>
-                    <p className="text-foreground/90 leading-relaxed">{selectedBrief.angle}</p>
-                  </div>
-                )}
-
-                {/* Format */}
-                {selectedBrief.format && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <FileText className="h-5 w-5 text-green-500" />
-                      <h3 className="font-semibold text-lg">Format</h3>
-                    </div>
-                    <p className="text-foreground/90 leading-relaxed">{selectedBrief.format}</p>
-                  </div>
-                )}
-
-                {/* Theme */}
-                {selectedBrief.theme && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Eye className="h-5 w-5 text-purple-500" />
-                      <h3 className="font-semibold text-lg">Theme</h3>
-                    </div>
-                    <p className="text-foreground/90 leading-relaxed">{selectedBrief.theme}</p>
-                  </div>
-                )}
-
-                {/* Avatar (Demographic Info) */}
-                {selectedBrief.avatar && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Users className="h-5 w-5 text-orange-500" />
-                      <h3 className="font-semibold text-lg">Audience Demographics</h3>
-                    </div>
-                    <p className="text-foreground/90 leading-relaxed">{selectedBrief.avatar}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        )}
+        {/* Brief Details Sidebar */}
+        <BriefSidebar 
+          brief={selectedBrief}
+          isOpen={!!selectedBrief}
+          onClose={() => setSelectedBrief(null)}
+        />
       </div>
     </AppLayout>
   );

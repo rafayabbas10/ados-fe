@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AppLayout } from "@/components/AppLayout";
 import { AnalysisProgressStepper } from "@/components/AnalysisProgressStepper";
+import { AdDetailsModal } from "@/components/AdDetailsModal";
 import { useAccount } from "@/contexts/AccountContext";
 import { 
   FileText, 
@@ -80,6 +81,8 @@ export default function Dashboard() {
     endDate: '',
     topAdsCount: '10'
   });
+  const [adDetailsModalOpen, setAdDetailsModalOpen] = useState(false);
+  const [selectedAdId, setSelectedAdId] = useState<string | null>(null);
 
   // Column widths state for creatives table
   const [columnWidths, setColumnWidths] = useState({
@@ -555,7 +558,18 @@ export default function Dashboard() {
   };
 
   const handleViewDetails = (creative: Creative) => {
-    window.location.href = `/ads/${encodeURIComponent(creative.id)}/details`;
+    setSelectedAdId(creative.id.toString());
+    setAdDetailsModalOpen(true);
+  };
+
+  const handleOpenAdDetails = (adId: number | string) => {
+    setSelectedAdId(adId.toString());
+    setAdDetailsModalOpen(true);
+  };
+
+  const handleCloseAdDetails = () => {
+    setAdDetailsModalOpen(false);
+    setSelectedAdId(null);
   };
 
   // Set default account when modal opens
@@ -754,7 +768,7 @@ export default function Dashboard() {
                       <Card 
                         key={ad.id} 
                         className="shadow-card hover:shadow-floating transition-all duration-300 hover:scale-[1.02] group cursor-pointer overflow-hidden border border-border hover:border-primary/50 bg-gradient-to-br from-card to-card/80"
-                        onClick={() => window.location.href = `/ads/${encodeURIComponent(ad.id.toString())}/details`}
+                        onClick={() => handleOpenAdDetails(ad.id)}
                       >
                         <CardHeader className="p-0 pb-0">
                           {/* Creative Thumbnail */}
@@ -1592,6 +1606,13 @@ export default function Dashboard() {
                       </form>
                     </DialogContent>
                   </Dialog>
+
+        {/* Ad Details Modal */}
+        <AdDetailsModal 
+          adId={selectedAdId}
+          isOpen={adDetailsModalOpen}
+          onClose={handleCloseAdDetails}
+        />
     </div>
     </AppLayout>
   );
